@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "zigx",
+      "name": "zx",
       "dependencies": {
         "libsodium-wrappers": "^0.7.15",
         "lodash-es": "^4.17.21",

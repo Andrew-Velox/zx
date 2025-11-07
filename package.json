@@ -2,7 +2,7 @@
   "name": "zx",
   "displayName": "ZX",
   "description": "ZX let's you write HTML within your Zig code.",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "nurulhudaapon",
   "icon": "images/zx-icon.png",
   "repository": {
@@ -17,7 +17,7 @@
   ],
   "keywords": [
     "zig",
-    "zigx",
+    "zx",
     "syntax",
     "highlighting"
   ],
@@ -39,7 +39,7 @@
     },
     "languages": [
       {
-        "id": "zigx",
+        "id": "zx",
         "extensions": [
           ".zx"
         ],
@@ -56,13 +56,13 @@
     ],
     "grammars": [
       {
-        "language": "zigx",
-        "scopeName": "source.zigx",
-        "path": "./syntaxes/zigx.tmLanguage.json",
+        "language": "zx",
+        "scopeName": "source.zx",
+        "path": "./syntaxes/zx.tmLanguage.json",
         "embeddedLanguages": {
-          "meta.tag.zigx": "zigx-tags",
-          "meta.tag.attributes.zigx": "zigx",
-          "meta.embedded.expression.zigx": "zigx"
+          "meta.tag.zx": "zx-tags",
+          "meta.tag.attributes.zx": "zx",
+          "meta.embedded.expression.zx": "zx"
         }
       }
     ]

@@ -1,7 +1,7 @@
 **
 !images/**
-!syntaxes/zigx.tmLanguage.json
-!syntaxes/zigx-injection.tmLanguage.json
+!syntaxes/zx.tmLanguage.json
+!syntaxes/zx-injection.tmLanguage.json
 !language-configuration.json
 !out/extension.js
 !package.json

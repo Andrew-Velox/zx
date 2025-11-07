@@ -19,8 +19,8 @@ import { ZigProvider } from "./zigProvider";
 const zigProvider = new ZigProvider();
 
 const ZIG_MODE = [
-    { language: "zigx", scheme: "file" },
-    { language: "zigx", scheme: "untitled" },
+    { language: "zx", scheme: "file" },
+    { language: "zx", scheme: "untitled" },
 ];
 
 let versionManagerConfig: versionManager.Config;
@@ -495,7 +495,7 @@ export async function activate(context: vscode.ExtensionContext) {
     };
 
     outputChannel = vscode.window.createOutputChannel("ZXLS", { log: true });
-    statusItem = vscode.languages.createLanguageStatusItem("zigx.ls.status", ZIG_MODE);
+    statusItem = vscode.languages.createLanguageStatusItem("zx.ls.status", ZIG_MODE);
     statusItem.name = "ZXLS";
     updateStatusItem(null);
 
