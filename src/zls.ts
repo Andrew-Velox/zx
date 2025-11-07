@@ -5,6 +5,7 @@ import {
     LSPAny,
     LanguageClient,
     LanguageClientOptions,
+    ProvideFoldingRangeSignature,
     ResponseError,
     ServerOptions,
 } from "vscode-languageclient/node";
@@ -14,9 +15,7 @@ import semver from "semver";
 import * as minisign from "./minisign";
 import * as versionManager from "./versionManager";
 import * as zigUtil from "./zigUtil";
-import { ZigProvider } from "./zigProvider";
-
-const zigProvider = new ZigProvider();
+import { zigProvider } from "./zigSetup";
 
 const ZIG_MODE = [
     { language: "zx", scheme: "file" },
@@ -78,11 +77,6 @@ async function startClient(zlsPath: string, zlsVersion: semver.SemVer): Promise<
         outputChannel,
         middleware: {
             handleDiagnostics(uri, diagnostics, next) {
-                // console.log(`[debug] ZLS diagnostics for ${uri.toString()}: ${diagnostics.length} entries`, diagnostics);
-                // diagnostics.forEach((diag) => {
-                //     console.log(`[debug] Diagnostic:`, diag);
-                // });
-
                 const filteredDiagnostics = diagnostics.map((diag) => {
                     // Filter out diagnostics with code "ZigE0424" (unused variable)
                     if (diag.severity === vscode.DiagnosticSeverity.Error && diag.message === "expected expression, found '<'") {
@@ -364,7 +358,7 @@ async function fetchVersion(
             response = context.globalState.get<SelectVersionResponse | SelectVersionFailureResponse>(cacheKey) ?? null;
         }
 
-    if (!response) {
+        if (!response) {
             if (err instanceof Error) {
                 void vscode.window.showErrorMessage(`Failed to query ZLS version: ${err.message}`);
             } else {
@@ -428,11 +422,11 @@ async function isEnabled(): Promise<boolean> {
 function updateStatusItem(version: semver.SemVer | null) {
     if (version) {
         statusItem.text = `ZXLS ${version.toString()}`;
-        // statusItem.detail = "ZXLS Version";
+        statusItem.detail = "ZXLS Version";
         statusItem.severity = vscode.LanguageStatusSeverity.Information;
         statusItem.command = {
             title: "View Output",
-            command: "zig.zls.openOutput",
+            command: "zx.zxls.openOutput",
         };
     } else {
         statusItem.text = "ZLS not enabled";
@@ -474,7 +468,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     versionManagerConfig = {
         context: context,
-        title: "ZXLS",
+        title: "ZLS",
         exeName: "zls",
         extraTarArgs: [],
         /** https://github.com/zigtools/release-worker */
@@ -494,10 +488,21 @@ export async function activate(context: vscode.ExtensionContext) {
         },
     };
 
+    // Remove after some time has passed from the prefix change.
+    await versionManager.convertOldInstallPrefixes(versionManagerConfig);
+
     outputChannel = vscode.window.createOutputChannel("ZXLS", { log: true });
-    statusItem = vscode.languages.createLanguageStatusItem("zx.ls.status", ZIG_MODE);
+    statusItem = vscode.languages.createLanguageStatusItem("zx.zxls.status", ZIG_MODE);
     statusItem.name = "ZXLS";
     updateStatusItem(null);
+
+    context.subscriptions.push(
+        outputChannel,
+        statusItem,
+        vscode.commands.registerCommand("zx.zxls.openOutput", () => {
+            outputChannel.show();
+        }),
+    );
 
     if (await isEnabled()) {
         await restartClient(context);
