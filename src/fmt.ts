@@ -10,8 +10,6 @@ import * as fmtUtil from "./fmt/util";
 
 const execFile = util.promisify(childProcess.execFile);
 
-const enableZigExpression = true;
-
 const htmlFormatConfig: HTMLFormatConfiguration = {
   tabSize: 4,
   insertSpaces: true,
@@ -127,14 +125,6 @@ export async function formatHtml(
   }> = [];
 
   for (const [zigKey, zigText] of zigExpressions.exprss.entries()) {
-    if (!enableZigExpression) {
-      // If formatting of embedded Zig expressions is not enabled, keep the
-      // original zig expression (including any inner HTML) and skip formatting
-      // of the inner HTML and the Zig expression itself.
-      formattedZigExpressions.set(zigKey, zigText);
-      continue;
-    }
-
     // Prepare inner HTML inside this zigText
     const innerPrepared = extractHtmls(zigText);
 
