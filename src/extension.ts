@@ -122,6 +122,30 @@ export function activate(context: ExtensionContext) {
 
   // Start the client. This will also launch the server
   client.start();
+
+  // Register command to toggle embedded Zig expression formatting
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "zx.toggleZigExpressionFormatting",
+      async () => {
+        const config = workspace.getConfiguration("zx");
+        const current = config.get<boolean>(
+          "format.enableZigExpression",
+          true,
+        );
+        const newValue = !current;
+        await config.update(
+          "format.enableZigExpression",
+          newValue,
+          vscode.ConfigurationTarget.Global,
+        );
+        vscode.window.showInformationMessage(
+          `ZX: embedded Zig expression formatting is now ${newValue ? "enabled" : "disabled"
+          }`,
+        );
+      },
+    ),
+  );
 }
 
 export function deactivate(): Thenable<void> | undefined {

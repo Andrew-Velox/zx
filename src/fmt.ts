@@ -171,6 +171,13 @@ export async function formatHtml(
   virtualHtmlDocumentContents: Map<string, string>,
   htmlLanguageService: ReturnType<typeof getLanguageService>,
 ): Promise<string> {
+  // Read configuration: formatting of embedded Zig expressions (and inner HTML)
+  // is opt-in via `zx.format.enableZigExpression`. Default is false (disabled)
+  // to avoid triggering known formatting bugs. When false, we preserve embedded
+  // expressions as-is. When true, the formatter will attempt to format them.
+  const enableZigExpression = vscode.workspace
+    .getConfiguration("zx")
+    .get<boolean>("format.enableZigExpression", false);
   // First, extract zig expressions inside this HTML block
   const zigExpressions = extractZigExprs(htmlContent);
   // segment.preparedSegmentText contains <zig:N /> placeholders instead of zig expressions
@@ -180,6 +187,14 @@ export async function formatHtml(
   const formattedZigExpressions = new Map<string, string>();
 
   for (const [zigKey, zigText] of zigExpressions.exprss.entries()) {
+    if (!enableZigExpression) {
+      // If formatting of embedded Zig expressions is not enabled, keep the
+      // original zig expression (including any inner HTML) and skip formatting
+      // of the inner HTML and the Zig expression itself.
+      formattedZigExpressions.set(zigKey, zigText);
+      continue;
+    }
+
     // Prepare inner HTML inside this zigText
     const innerPrepared = extractHtmls(zigText);
 
@@ -621,12 +636,12 @@ export function patchInFormattedHtml(
                 break;
               }
             }
-            
+
             if (openingBraceLine === -1) {
               // No opening brace found, not inside for loop
               break;
             }
-            
+
             // Count braces from the opening brace to the key line
             let braceCount = 1; // We start with the opening brace
             for (let j = openingBraceLine; j <= keyLineIndex; j++) {
@@ -648,7 +663,7 @@ export function patchInFormattedHtml(
                 break;
               }
             }
-            
+
             // If we're still inside braces (braceCount > 0), we're in a for loop
             if (braceCount > 0) {
               isInsideForLoop = true;
@@ -869,35 +884,35 @@ function addSemicolonsToHtmlPlaceholders(text: string): string {
   // Match @html(n) or (@html(n)) patterns
   const htmlPattern = /(@html\(\d+\)|\(@html\(\d+\)\))/g;
   const matches: Array<{ match: string; index: number }> = [];
-  
+
   // Collect all matches with their positions
   let match;
   while ((match = htmlPattern.exec(text)) !== null) {
     matches.push({ match: match[0], index: match.index });
   }
-  
+
   // Process matches from end to start to avoid position shifts
   let result = text;
   for (let i = matches.length - 1; i >= 0; i--) {
     const { match: htmlMatch, index } = matches[i];
-    
+
     // Check if this is already followed by a semicolon
     const afterMatch = result.slice(index + htmlMatch.length);
     const trimmedAfter = afterMatch.trimStart();
-    
+
     // If already has semicolon, skip
     if (trimmedAfter.startsWith(';')) {
       continue;
     }
-    
+
     // Check if we're inside a control flow block by looking backwards for if/else/for/while
     // and checking if we're inside braces
     // Note: switch statements are excluded as they don't require semicolons
     const beforeMatch = result.slice(0, index);
-    
+
     // Find all control flow keywords before this position
     const controlFlowMatches: Array<{ keyword: string; index: number }> = [];
-    
+
     // Handle keywords with parentheses: if, for, while
     for (const keyword of ['if', 'for', 'while']) {
       const regex = new RegExp(`\\b${keyword}\\s*\\(`, 'g');
@@ -906,44 +921,44 @@ function addSemicolonsToHtmlPlaceholders(text: string): string {
         controlFlowMatches.push({ keyword, index: m.index });
       }
     }
-    
+
     // Also check for 'else' (which doesn't have parentheses)
     const elseRegex = /\belse\s*{/g;
     let elseMatch;
     while ((elseMatch = elseRegex.exec(beforeMatch)) !== null) {
       controlFlowMatches.push({ keyword: 'else', index: elseMatch.index });
     }
-    
+
     // Check for switch statements (to exclude them)
     const switchRegex = /\bswitch\s*\(/g;
     let switchMatch;
     while ((switchMatch = switchRegex.exec(beforeMatch)) !== null) {
       controlFlowMatches.push({ keyword: 'switch', index: switchMatch.index });
     }
-    
+
     // Find the closest control flow keyword
     if (controlFlowMatches.length === 0) {
       continue;
     }
-    
+
     // Sort by index descending to get the closest (last) one
     controlFlowMatches.sort((a, b) => b.index - a.index);
     const closestControlFlow = controlFlowMatches[0];
-    
+
     // If the closest control flow is a switch, skip adding semicolon
     if (closestControlFlow.keyword === 'switch') {
       continue;
     }
-    
+
     const lastControlFlowPos = closestControlFlow.index;
-    
+
     // Check if we're inside braces after the control flow keyword
     // Find the opening brace of the control flow block and count braces to our position
     const afterControlFlow = beforeMatch.slice(lastControlFlowPos);
     let braceCount = 0;
     let foundOpeningBrace = false;
     let openingBracePos = -1;
-    
+
     // Find the opening brace after the control flow keyword
     for (let j = 0; j < afterControlFlow.length; j++) {
       const char = afterControlFlow[j];
@@ -954,11 +969,11 @@ function addSemicolonsToHtmlPlaceholders(text: string): string {
         break;
       }
     }
-    
+
     if (!foundOpeningBrace) {
       continue;
     }
-    
+
     // Count braces from the opening brace to our position
     for (let k = openingBracePos + 1; k < afterControlFlow.length; k++) {
       const char = afterControlFlow[k];
@@ -972,13 +987,13 @@ function addSemicolonsToHtmlPlaceholders(text: string): string {
         }
       }
     }
-    
+
     // If we're still inside the opening brace (braceCount > 0), add semicolon
     if (braceCount > 0) {
       result = result.slice(0, index + htmlMatch.length) + ';' + result.slice(index + htmlMatch.length);
     }
   }
-  
+
   return result;
 }
 
