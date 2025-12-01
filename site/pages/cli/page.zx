@@ -217,7 +217,7 @@ cat file.zx | zx fmt --stdio</code></pre>
                     <ul class="cli-flag-list">
                         <li class="cli-flag-item">
                             <span class="cli-flag-name">--version, -v <code>version</code></span>
-                            <p class="cli-flag-desc">Version to update to (default: <code>"latest"</code>). Can be a specific version like <code>"0.0.403"</code> or <code>"latest"</code> for the latest release</p>
+                            <p class="cli-flag-desc">Version to update to (default: <code>"latest"</code>). Can be a specific version like <code>{zx.info.version_string}</code> or <code>"latest"</code> for the latest release</p>
                         </li>
                     </ul>
                 </div>
@@ -228,7 +228,7 @@ cat file.zx | zx fmt --stdio</code></pre>
 zx update
 
 # Update to specific version
-zx update --version 0.0.403</code></pre>
+zx update --version {zx.info.version_string}</code></pre>
                 </div>
             </div>
 
@@ -244,7 +244,7 @@ zx update --version 0.0.403</code></pre>
                     <ul class="cli-flag-list">
                         <li class="cli-flag-item">
                             <span class="cli-flag-name">--version, -v <code>version</code></span>
-                            <p class="cli-flag-desc">Version to upgrade to (default: <code>"latest"</code>). Can be a specific version like <code>"0.0.403"</code> or <code>"latest"</code> for the latest release</p>
+                            <p class="cli-flag-desc">Version to upgrade to (default: <code>"latest"</code>). Can be a specific version like <code>{zx.info.version_string}</code> or <code>"latest"</code> for the latest release</p>
                         </li>
                     </ul>
                 </div>
@@ -255,7 +255,7 @@ zx update --version 0.0.403</code></pre>
 zx upgrade
 
 # Upgrade to specific version
-zx upgrade --version 0.0.403</code></pre>
+zx upgrade --version {zx.info.version_string}</code></pre>
                 </div>
                 
                 <div class="cli-note">

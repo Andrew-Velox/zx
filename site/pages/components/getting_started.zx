@@ -18,21 +18,23 @@ zx init</code></pre>
             <p>
                 Make sure to run <code>zx init</code> inside a clean project folder. After running the command, you'll see:
             </p>
-            <pre class="language-bash"><code>○ Initializing ZX project!  Template: default
+            <pre class="language-bash"><code>○ Initializing ZX project!
 
-  + .vscode/extensions.json
-  + build.zig.zon
-  + build.zig
-  + README.md
-  + site/assets/style.css
-  + site/main.zig
-  + site/pages/about/page.zx
-  + site/pages/layout.zx
-  + site/pages/page.zx
-  + src/root.zig
-  + .gitignore
+  - [default]
+    + .vscode/extensions.json
+    + build.zig.zon
+    + build.zig
+    + README.md
+    + site/public/style.css
+    + site/public/favicon.ico
+    + site/main.zig
+    + site/pages/about/page.zx
+    + site/pages/layout.zx
+    + src/root.zig
+    + .gitignore
+    + site/pages/page.zx
 
-Now run → 
+Now run →
 
 zig build serve</code></pre>
             <p>
@@ -42,8 +44,7 @@ zig build serve</code></pre>
             <p>
                 You'll see the server start:
             </p>
-            <pre class="language-bash"><code>ZX · 0.0.1-dev.90
-  - Local: http://localhost:3000</code></pre>
+            <pre class="language-bash"><code>ZX - {zx.info.version_string} | http://localhost:3000</code></pre>
 
             <h3 id="editor-setup">Editor Setup</h3>
             <p>

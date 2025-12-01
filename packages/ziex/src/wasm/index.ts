@@ -12,12 +12,20 @@ const importObject = {
 
 class ZXInstance {
 
-    exports: Record<string, (...args: any[]) => void>;
+    exports: WebAssembly.Exports;
     events: Event[];
+    actions: Record<string, (eventId: number) => void>;
 
     constructor({ exports, events = [] }: ZXInstanceOptions) {
         this.exports = exports;
         this.events = events;
+        this.actions = {};
+
+        Object.entries(exports).forEach(([name, func]) => {
+            if (typeof func !== 'function') return;
+
+            this.actions[name] = this.#actionWrapper.bind(this, name);
+        });
     }
 
     addEvent(event: Event) {
@@ -27,15 +35,23 @@ class ZXInstance {
         const idx = this.events.push(event);
         
         return idx - 1;
-    }   
+    }
+    
+    #actionWrapper(name: string, ...args: any[]) {
+        const func = this.exports[name];
+        if (typeof func !== 'function') throw new Error(`Action ${name} is not a function`);
+
+        const eventId = this.addEvent(args[0]);
+        return func(eventId);
+    }
 }
 
 export async function init(options: InitOptions = {}) {
-    const response = await (await fetch(options?.url ?? DEFAULT_URL)).arrayBuffer();
-    const { instance } = await WebAssembly.instantiate(response, importObject);
+    const url = options?.url ?? DEFAULT_URL;
+    const { instance } = await WebAssembly.instantiateStreaming(fetch(url), importObject);
 
     jsz.memory = instance.exports.memory as WebAssembly.Memory;
-    window._zx = new ZXInstance({ exports: instance.exports as Record<string, (...args: any[]) => void> });
+    window._zx = new ZXInstance({ exports: instance.exports  });
 
     const main = instance.exports.main as () => void;
     main();
@@ -47,8 +63,8 @@ export type InitOptions = {
 };
 
 type ZXInstanceOptions = {
-    exports: Record<string, (...args: any[]) => void>;
-    events?: Event[];
+    exports: ZXInstance['exports'];
+    events?: ZXInstance['events']
 }
 
 declare global {
