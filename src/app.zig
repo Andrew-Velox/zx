@@ -77,9 +77,38 @@ pub const App = struct {
     pub fn start(self: *App) !void {
         if (self._is_listening) return;
         self._is_listening = true;
+
         self.server.listen() catch |err| {
             self._is_listening = false;
-            return err;
+
+            switch (err) {
+                error.AddressInUse => {
+                    const is_dev = self.meta.cli_command == .dev;
+                    const port = self.server.config.port.?;
+                    var max_retries: u8 = 10;
+
+                    if (is_dev) while (max_retries > 0) : (max_retries -= 1) {
+                        const new_port = port + 1;
+                        std.debug.print("\x1b[1m\x1b[33mPort {d} is already in use, trying with port {d}...\x1b[0m\n\n", .{ port, new_port });
+                        std.debug.print("To kill the port, run:\n  \x1b[2mkill -9 $(lsof -t -i:{d})\x1b[0m\n\n", .{port});
+                        self.server.config.port = new_port;
+
+                        self.server.deinit();
+                        var retry_app = try init(self.allocator, .{ .server = self.server.config, .meta = self.meta });
+                        defer retry_app.deinit();
+
+                        retry_app.info();
+                        return retry_app.start();
+                    } else {
+                        std.debug.print("\x1b[1m\x1b[31mFailed to find available port after {d} retries\x1b[0m\n", .{max_retries});
+                    };
+
+                    if (!is_dev) std.debug.print("\x1b[1m\x1b[31mPort {d} is already in use\x1b[0m\n", .{port});
+
+                    std.debug.print("To kill the port, run:\n  \x1b[2mkill -9 $(lsof -t -i:{d})\x1b[0m\n\n", .{port});
+                },
+                else => return err,
+            }
         };
     }
 

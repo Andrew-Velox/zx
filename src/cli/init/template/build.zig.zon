@@ -5,8 +5,8 @@
     .minimum_zig_version = "0.15.2",
     .dependencies = .{
         .zx = .{
-            .url = "git+https://github.com/nurulhudaapon/zx?ref=v0.0.1-dev.230#8cecc88f92a9ac8bb6a924f4b3c36492c9b51ee4",
-            .hash = "zx-0.0.1-dev.228-8okzKp2xGgBW0LqBsS7O1ghmNZo9155voi8snvFWbM65",
+            .url = "git+https://github.com/nurulhudaapon/zx?ref=v0.0.1-dev.248#b95631cf0ccf956b3fae851c590a3cb42c7a77d5",
+            .hash = "zx-0.0.1-dev.248-8okzKgyRGwAZkX3DyvfWKmRm9O-7tWqn6sfWlQS4WK6g",
         },
     },
     .paths = .{
