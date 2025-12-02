@@ -1,6 +1,15 @@
 #!/bin/bash
+CURRENT_VERSION=v$(grep -E '^\s*\.version\s*=' build.zig.zon | sed -E 's/.*"([^"]+)".*/\1/')
+
 cd src/cli/init/template
-LATEST_ZX_VERSION=$(curl -s https://api.github.com/repos/nurulhudaapon/zx/releases/latest | sed -n 's/.*"tag_name": "\([^"]*\)".*/\1/p')
-zig fetch --save "git+https://github.com/nurulhudaapon/zx#${LATEST_ZX_VERSION}"
+
+# Since we are releasing as pre-release it takes the last latest releases
+# LATEST_RELEASE_VERSION=$(curl -s https://api.github.com/repos/nurulhudaapon/zx/releases/latest | sed -n 's/.*"tag_name": "\([^"]*\)".*/\1/p')
+# zig fetch --save "git+https://github.com/nurulhudaapon/zx#${LATEST_RELEASE_VERSION}"
+
+
+echo "Updating template to latest zx version: ${CURRENT_VERSION}"
+zig fetch --save "git+https://github.com/nurulhudaapon/zx#${CURRENT_VERSION}"
+
 npx --yes npm-check-updates -u
 # git commit -m"feat: update template to latest zx"
