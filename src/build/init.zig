@@ -12,11 +12,19 @@ pub const ZxInitOptions = struct {
         path: []const u8,
     };
 
+    const ExperimentalOptions = struct {
+        /// Enabled Client Side Rendering (CSR)
+        enabled_csr: bool = false,
+    };
+
     // It is recommended to use the default options, but you can override them if you want to
     site: ?SiteOptions = null,
 
     /// Options for the ZX CLI, if null then the ZX CLI will be used from the soure of ZX dependency
     cli: ?CliOptions = null,
+
+    /// Experimental options, if null then the experimental options will be used from the source of ZX dependency
+    experimental: ?ExperimentalOptions = null,
 };
 
 const default_inner_opts: InitInnerOptions = .{
@@ -45,6 +53,10 @@ pub fn init(b: *std.Build, exe: *std.Build.Step.Compile, options: ZxInitOptions)
         opts.cli_path = cli_opts.path;
     }
 
+    if (options.experimental) |experimental_opts| {
+        opts.experimental_enabled_csr = experimental_opts.enabled_csr;
+    }
+
     return initInner(b, exe, zx_exe, zx_module, zx_wasm_module, opts);
 }
 
@@ -52,6 +64,8 @@ const InitInnerOptions = struct {
     site_path: []const u8,
     cli_path: ?[]const u8,
     site_outdir: ?[]const u8 = null,
+
+    experimental_enabled_csr: bool = false,
 };
 
 fn getZxRun(b: *std.Build, zx_exe: *std.Build.Step.Compile, opts: InitInnerOptions) *std.Build.Step.Run {
@@ -122,35 +136,36 @@ pub fn initInner(
     b.installArtifact(exe);
 
     // --- ZX WASM Main Executable --- //
-    const wasm_exe = b.addExecutable(.{
-        .name = b.fmt("main", .{}),
-        .root_module = b.createModule(.{
-            .root_source_file = exe.root_module.root_source_file,
-            .target = b.resolveTargetQuery(.{ .cpu_arch = .wasm32, .os_tag = .freestanding, .abi = .none }),
-            .optimize = if (optimize == .ReleaseFast) .ReleaseSmall else optimize,
-        }),
-    });
-    wasm_exe.entry = .disabled;
-    wasm_exe.export_memory = true;
-    wasm_exe.rdynamic = true;
-    wasm_exe.root_module.addImport("zx", zx_wasm_module);
-    wasm_exe.root_module.addAnonymousImport("zx_components", .{
-        .root_source_file = transpile_outdir.path(b, "components.zig"),
-        .imports = &.{.{ .name = "zx", .module = zx_wasm_module }},
-    });
-    wasm_exe.step.dependOn(&transpile_cmd.step);
+    if (opts.experimental_enabled_csr) {
+        const wasm_exe = b.addExecutable(.{
+            .name = b.fmt("main", .{}),
+            .root_module = b.createModule(.{
+                .root_source_file = exe.root_module.root_source_file,
+                .target = b.resolveTargetQuery(.{ .cpu_arch = .wasm32, .os_tag = .freestanding, .abi = .none }),
+                .optimize = if (optimize == .ReleaseFast) .ReleaseSmall else optimize,
+            }),
+        });
+        wasm_exe.entry = .disabled;
+        wasm_exe.export_memory = true;
+        wasm_exe.rdynamic = true;
+        wasm_exe.root_module.addImport("zx", zx_wasm_module);
+        wasm_exe.root_module.addAnonymousImport("zx_components", .{
+            .root_source_file = transpile_outdir.path(b, "components.zig"),
+            .imports = &.{.{ .name = "zx", .module = zx_wasm_module }},
+        });
+        wasm_exe.step.dependOn(&transpile_cmd.step);
 
-    // --- CMD: ZX Post Transpile --- //
-    const post_transpile_cmd = getZxRun(b, zx_exe, opts);
-    post_transpile_cmd.addArgs(&.{"transpile"});
-    post_transpile_cmd.addFileArg(wasm_exe.getEmittedBin());
-    post_transpile_cmd.addArgs(&.{ "--copy-only", "--outdir" });
-    post_transpile_cmd.addDirectoryArg(transpile_outdir.path(b, "assets"));
-    post_transpile_cmd.expectExitCode(0);
-    post_transpile_cmd.step.dependOn(&transpile_cmd.step);
-    post_transpile_cmd.step.dependOn(&wasm_exe.step);
-    b.default_step.dependOn(&post_transpile_cmd.step);
-
+        // --- CMD: ZX Post Transpile --- //
+        const post_transpile_cmd = getZxRun(b, zx_exe, opts);
+        post_transpile_cmd.addArgs(&.{"transpile"});
+        post_transpile_cmd.addFileArg(wasm_exe.getEmittedBin());
+        post_transpile_cmd.addArgs(&.{ "--copy-only", "--outdir" });
+        post_transpile_cmd.addDirectoryArg(transpile_outdir.path(b, "assets"));
+        post_transpile_cmd.expectExitCode(0);
+        post_transpile_cmd.step.dependOn(&transpile_cmd.step);
+        post_transpile_cmd.step.dependOn(&wasm_exe.step);
+        b.default_step.dependOn(&post_transpile_cmd.step);
+    }
     // --- Steps: Serve --- //
     const serve_step = b.step("serve", "Run the Zx website");
     const serve_cmd = b.addRunArtifact(exe);

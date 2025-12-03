@@ -33,6 +33,6 @@ pub const std_options = std.Options{
         .{ .scope = .@"html/tokenizer", .level = .info },
         .{ .scope = .@"html/ast/fmt", .level = .info },
         .{ .scope = .ast, .level = if (builtin.mode == .Debug) .info else .warn },
-        .{ .scope = .cli, .level = if (builtin.mode == .Debug) .debug else .info },
+        .{ .scope = .cli, .level = if (builtin.mode == .Debug) .info else .info },
     },
 };

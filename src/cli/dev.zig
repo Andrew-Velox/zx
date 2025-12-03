@@ -85,6 +85,7 @@ fn dev(ctx: zli.CommandContext) !void {
         .stderr = .{ .mode = .first_line_then_transparent, .target = .stderr },
         .stdout = .{ .mode = .transparent, .target = .stdout },
     });
+    defer runner_output.deinit();
 
     // Wait for the first line to be captured, then print it synchronously
     runner_output.waitForFirstLine();
@@ -125,6 +126,7 @@ fn dev(ctx: zli.CommandContext) !void {
                 .stderr = .{ .mode = .first_line_then_transparent, .target = .stderr },
                 .stdout = .{ .mode = .transparent, .target = .stdout },
             });
+            defer restart_output.deinit();
 
             // Wait for the first line to be captured, then print it synchronously
             restart_output.waitForFirstLine();

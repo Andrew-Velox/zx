@@ -25,5 +25,8 @@ pub fn build(b: *std.Build) !void {
             },
         }),
     });
-    try zx.init(b, site_exe, .{});
+
+    try zx.init(b, site_exe, .{
+        .experimental = .{ .enabled_csr = true },
+    });
 }

@@ -111,7 +111,7 @@ const templates = [_]TemplateFile{
     // Shared
     .{ .path = ".vscode/extensions.json", .content = @embedFile(template_dir ++ "/.vscode/extensions.json") },
     .{ .path = "build.zig.zon", .content = @embedFile(template_dir ++ "/build.zig.zon") },
-    .{ .path = "build.zig", .content = @embedFile(template_dir ++ "/build.zig") },
+    // .{ .path = "build.zig", .content = @embedFile(template_dir ++ "/build.zig"), .lines = &.{ .{ 1, 28 }, .{ 30, 32 } } },
     .{ .path = "README.md", .content = @embedFile(template_dir ++ "/README.md") },
     .{ .path = "site/public/style.css", .content = @embedFile(template_dir ++ "/site/public/style.css") },
     .{ .path = "site/public/favicon.ico", .content = @embedFile(template_dir ++ "/site/public/favicon.ico") },
@@ -120,11 +120,13 @@ const templates = [_]TemplateFile{
     .{ .path = "src/root.zig", .content = @embedFile(template_dir ++ "/src/root.zig") },
     .{ .path = ".gitignore", .content = @embedFile(template_dir ++ "/.gitignore") },
 
-    // Default (SSR + CSR-WASM)
+    // Default (SSR)
+    .{ .name = .default, .path = "build.zig", .content = @embedFile(template_dir ++ "/build.zig"), .lines = &.{ .{ 1, 29 }, .{ 31, 33 } } },
     .{ .name = .default, .path = "site/main.zig", .content = @embedFile(template_dir ++ "/site/main.zig") },
     .{ .name = .default, .path = "site/pages/page.zx", .content = @embedFile(template_dir ++ "/site/pages/page.zx") },
 
     // React (CSR)
+    .{ .name = .react, .path = "build.zig", .content = @embedFile(template_dir ++ "/build.zig"), .lines = &.{ .{ 1, 29 }, .{ 31, 33 } } },
     .{ .name = .react, .path = "site/main.zig", .content = @embedFile(template_dir ++ "/site/main.zig"), .lines = &.{ .{ 1, 3 }, .{ 5, 8 }, .{ 11, 21 } } },
     .{ .name = .react, .path = "site/main.ts", .content = @embedFile(template_dir ++ "/site/main.ts"), .lines = &.{ .{ 1, 4 }, .{ 7, 7 }, .{ 11, 18 } } },
     .{ .name = .react, .path = "site/pages/page.zx", .content = @embedFile(template_dir ++ "/site/pages/page+react.zx") },
@@ -133,12 +135,14 @@ const templates = [_]TemplateFile{
     .{ .name = .react, .path = "tsconfig.json", .content = @embedFile(template_dir ++ "/tsconfig.json") },
 
     // WASM (CSR)
+    .{ .name = .wasm, .path = "build.zig", .content = @embedFile(template_dir ++ "/build.zig") },
     .{ .name = .wasm, .path = "site/main.zig", .content = @embedFile(template_dir ++ "/site/main.zig") },
     .{ .name = .wasm, .path = "site/assets/main.wasm.js", .content = @embedFile(template_dir ++ "/site/assets/main.wasm.js") },
     .{ .name = .wasm, .path = "site/pages/page.zx", .content = @embedFile(template_dir ++ "/site/pages/page+wasm.zx") },
     .{ .name = .wasm, .path = "site/pages/client.zx", .content = @embedFile(template_dir ++ "/site/pages/client.zx") },
 
     // React + WASM
+    .{ .name = .react_wasm, .path = "build.zig", .content = @embedFile(template_dir ++ "/build.zig"), .lines = &.{ .{ 1, 29 }, .{ 31, 33 } } },
     .{ .name = .react_wasm, .path = "site/main.zig", .content = @embedFile(template_dir ++ "/site/main.zig") },
     .{ .name = .react_wasm, .path = "site/main.ts", .content = @embedFile(template_dir ++ "/site/main.ts") },
     .{ .name = .react_wasm, .path = "site/pages/page.zx", .content = @embedFile(template_dir ++ "/site/pages/page+react_wasm.zx") },
