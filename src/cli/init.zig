@@ -120,8 +120,8 @@ const templates = [_]TemplateFile{
     .{ .path = "src/root.zig", .content = @embedFile(template_dir ++ "/src/root.zig") },
     .{ .path = ".gitignore", .content = @embedFile(template_dir ++ "/.gitignore") },
 
-    // Default (SSR)
-    .{ .name = .default, .path = "site/main.zig", .content = @embedFile(template_dir ++ "/site/main.zig"), .lines = &.{ .{ 1, 3 }, .{ 5, 8 }, .{ 11, 21 } } },
+    // Default (SSR + CSR-WASM)
+    .{ .name = .default, .path = "site/main.zig", .content = @embedFile(template_dir ++ "/site/main.zig") },
     .{ .name = .default, .path = "site/pages/page.zx", .content = @embedFile(template_dir ++ "/site/pages/page.zx") },
 
     // React (CSR)

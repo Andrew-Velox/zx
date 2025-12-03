@@ -69,8 +69,20 @@ fn dev(ctx: zli.CommandContext) !void {
     };
 
     var runner = std.process.Child.init(&.{ runnable_program_path, "--cli-command", "dev" }, allocator);
+    runner.stderr_behavior = .Pipe;
+    runner.stdout_behavior = .Pipe;
+
     try runner.spawn();
-    defer _ = runner.kill() catch unreachable;
+    // Start the output reading thread (non-blocking stream reading)
+    log.debug("Starting runner output", .{});
+    try runnerOutput(ctx, &runner);
+    log.debug("Finished runner output", .{});
+
+    // Spawn the initial process (non-blocking)
+
+    defer _ = runner.kill() catch |err| {
+        log.debug("Error killing runner: {any}", .{err});
+    };
 
     var bin_mtime: i128 = 0;
     var current_interval_ns: u64 = MIN_RESTART_INTERVAL_NS;
@@ -91,7 +103,12 @@ fn dev(ctx: zli.CommandContext) !void {
                 _ = try builder.kill();
                 try builder.spawn();
             }
+
             try runner.spawn();
+
+            log.debug("Starting runner output", .{});
+            try runnerOutput(ctx, &runner);
+            log.debug("Finished runner output", .{});
 
             std.debug.print("\n", .{});
 
@@ -117,7 +134,39 @@ fn dev(ctx: zli.CommandContext) !void {
 
     errdefer {
         // _ = builder.kill() catch unreachable;
-        _ = if (runner.id != 0) runner.kill() catch unreachable;
+        // _ = if (runner.id != 0) runner.kill() catch unreachable;
+    }
+}
+
+fn runnerOutput(ctx: zli.CommandContext, runner: *std.process.Child) !void {
+    var stderr_buffer: [8192]u8 = undefined;
+
+    var stderr_line_writer = std.Io.Writer.Allocating.init(ctx.allocator);
+    defer stderr_line_writer.deinit();
+
+    // Wait for process to be spawned
+    while (runner.stderr == null and runner.stdout == null) {
+        std.Thread.sleep(100 * std.time.ns_per_ms);
+        log.debug("Waiting for runner to be spawned", .{});
+    }
+
+    // Read from stderr line by line
+    if (runner.stderr) |stderr_file| {
+        var stderr_reader = stderr_file.readerStreaming(&stderr_buffer);
+        const reader = &stderr_reader.interface;
+
+        while (reader.streamDelimiter(&stderr_line_writer.writer, '\n')) |_| {
+            log.debug("Stderr: {s}", .{stderr_line_writer.written()});
+            stderr_line_writer.clearRetainingCapacity();
+            return;
+        } else |read_err| {
+            if (read_err != error.EndOfStream) {
+                if (read_err == error.BrokenPipe) {} else {
+                    log.debug("Error reading stderr: {any}", .{read_err});
+                }
+            }
+            return;
+        }
     }
 }
 

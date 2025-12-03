@@ -1170,9 +1170,10 @@ fn transpileCommand(
         };
     }
 
-    if (csz_components.items.len > 0) {
-        genClientMainWasm(allocator, csz_components.items, output_dir, verbose) catch |err| {
-            std.debug.print("Warning: Failed to generate main_wasm.zig: {}\n", .{err});
-        };
-    }
+    // if (csz_components.items.len > 0) {
+    // Always generate components.zig
+    genClientMainWasm(allocator, csz_components.items, output_dir, verbose) catch |err| {
+        std.debug.print("Warning: Failed to generate main_wasm.zig: {}\n", .{err});
+    };
+    // }
 }
