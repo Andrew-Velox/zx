@@ -1,5 +1,11 @@
 #!/bin/bash
-CURRENT_VERSION=v$(grep -E '^\s*\.version\s*=' build.zig.zon | sed -E 's/.*"([^"]+)".*/\1/')
+# Use provided version argument, or fall back to current version from build.zig.zon
+if [ -n "$1" ]; then
+    VERSION="$1"
+else
+    CURRENT_VERSION=v$(grep -E '^\s*\.version\s*=' build.zig.zon | sed -E 's/.*"([^"]+)".*/\1/')
+    VERSION="${CURRENT_VERSION}"
+fi
 
 cd src/cli/init/template
 
@@ -8,8 +14,8 @@ cd src/cli/init/template
 # zig fetch --save "git+https://github.com/nurulhudaapon/zx#${LATEST_RELEASE_VERSION}"
 
 
-echo "Updating template to latest zx version: ${CURRENT_VERSION}"
-zig fetch --save "git+https://github.com/nurulhudaapon/zx#${CURRENT_VERSION}"
+echo "Updating template to zx version: ${VERSION}"
+zig fetch --save "git+https://github.com/nurulhudaapon/zx#${VERSION}"
 
 npx --yes npm-check-updates -u
 # git commit -m"feat: update template to latest zx"
