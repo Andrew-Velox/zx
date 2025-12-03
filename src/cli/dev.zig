@@ -78,7 +78,7 @@ fn dev(ctx: zli.CommandContext) !void {
     runner.stdout_behavior = .Pipe;
 
     try runner.spawn();
-    std.debug.print("{s}Running ZX Dev Server...{s}\n", .{ Colors.cyan, Colors.reset });
+    std.debug.print("{s}Running ZX Dev Server...{s}\x1b[K\n", .{ Colors.cyan, Colors.reset });
 
     // Capture first line from stderr, then continue in transparent mode
     var runner_output = try util.captureChildOutput(ctx.allocator, &runner, .{
