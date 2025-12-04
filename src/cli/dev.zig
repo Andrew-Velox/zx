@@ -12,6 +12,12 @@ pub fn register(writer: *std.Io.Writer, reader: *std.Io.Reader, allocator: std.m
         .type = .Bool,
         .default_value = .{ .Bool = false },
     });
+    try cmd.addFlag(.{
+        .name = "tui-underline",
+        .description = "Show underlined status messages",
+        .type = .Bool,
+        .default_value = .{ .Bool = true },
+    });
 
     return cmd;
 }
@@ -23,6 +29,7 @@ fn dev(ctx: zli.CommandContext) !void {
     const binpath = ctx.flag("binpath", []const u8);
     const build_args_str = ctx.flag("build-args", []const u8);
     const show_progress = ctx.flag("progress", bool);
+    const show_underline = ctx.flag("tui-underline", bool);
     var build_args = std.mem.splitSequence(u8, build_args_str, " ");
 
     var build_args_array = std.ArrayList([]const u8).empty;
@@ -50,10 +57,10 @@ fn dev(ctx: zli.CommandContext) !void {
     try build_args_array.append(allocator, "--watch");
 
     // Add --summary all in silent mode to get detailed timing info
-    if (!show_progress) {
-        try build_args_array.append(allocator, "--summary");
-        try build_args_array.append(allocator, "all");
-    }
+    // if (!show_progress) {
+    try build_args_array.append(allocator, "--summary");
+    try build_args_array.append(allocator, "all");
+    // }
 
     var builder = std.process.Child.init(build_args_array.items, allocator);
 
@@ -95,8 +102,14 @@ fn dev(ctx: zli.CommandContext) !void {
     runner.stderr_behavior = .Pipe;
     runner.stdout_behavior = .Pipe;
 
+    // Start timer for server startup
+    var startup_timer = try std.time.Timer.start();
+
+    // Print starting message
+    const underline_code = if (show_underline) Colors.underline else "";
+    try ctx.writer.print("{s}{s}Starting ZX Dev Server...{s}", .{ Colors.cyan, underline_code, Colors.reset });
+
     try runner.spawn();
-    std.debug.print("{s}Running ZX Dev Server...{s}\x1b[K\n", .{ Colors.cyan, Colors.reset });
 
     // Capture first line from stderr, then continue in transparent mode
     var runner_output = try util.captureChildOutput(ctx.allocator, &runner, .{
@@ -107,6 +120,11 @@ fn dev(ctx: zli.CommandContext) !void {
 
     // Wait for the first line to be captured, then print it synchronously
     runner_output.waitForFirstLine();
+
+    // Print completion with timing
+    const startup_time_ms = startup_timer.lap() / std.time.ns_per_ms;
+    try ctx.writer.print("\r{s}{s}Starting ZX Dev Server... {s}done in {d:.0} ms{s}\x1b[K\n", .{ Colors.cyan, underline_code, Colors.green, startup_time_ms, Colors.reset });
+
     printFirstLine(&runner_output);
 
     // Get initial binary modification time
@@ -187,8 +205,9 @@ fn dev(ctx: zli.CommandContext) !void {
                 }
             }
 
-            // Print restart message right before spawning (after all build/kill operations)
-            try ctx.writer.print("\r\x1b[2K{s}Restarting ZX App...{s}", .{ Colors.cyan, Colors.reset });
+            // Print restart message right before spawning
+            const restart_underline = if (show_underline) Colors.underline else "";
+            try ctx.writer.print("\n{s}{s}Restarting ZX App...{s}", .{ Colors.cyan, restart_underline, Colors.reset });
 
             try runner.spawn();
 
@@ -224,11 +243,11 @@ fn dev(ctx: zli.CommandContext) !void {
                 // // VARIATION 6: Gray brackets/+, green numbers, NO space before ms
                 // try ctx.writer.print("{s}Restarting ZX App... {s}done in {s}[{s}{d}{s} + {s}{d:.0}{s}]{s}ms{s}\x1b[K\n", .{ Colors.cyan, Colors.green, Colors.gray, Colors.green, build_duration_ms, Colors.gray, Colors.green, restart_time_ms, Colors.gray, Colors.green, Colors.reset });
 
-                // VARIATION 7: Gray entire timing, NO space before ms
-                try ctx.writer.print("\r{s}Restarting ZX App... {s}done in {s}[{d} + {d:.0}]ms{s}\x1b[K\n", .{ Colors.cyan, Colors.green, Colors.gray, build_duration_ms, restart_time_ms, Colors.reset });
+                // VARIATION 7: Whole line underlined (optional), timing in gray, NO space before ms
+                try ctx.writer.print("\r{s}{s}Restarting ZX App... {s}{s}done in {s}[{d} + {d:.0}]ms{s}\x1b[K\n", .{ Colors.cyan, restart_underline, Colors.green, restart_underline, Colors.gray, build_duration_ms, restart_time_ms, Colors.reset });
             } else {
-                // Fallback: only show restart time
-                try ctx.writer.print("\r{s}Restarting ZX App... {s}done in {d:.0} ms{s}\x1b[K\n", .{ Colors.cyan, Colors.green, restart_time_ms, Colors.reset });
+                // Fallback: only show restart time, whole line underlined (optional)
+                try ctx.writer.print("\r{s}{s}Restarting ZX App... {s}{s}done in {d:.0} ms{s}\x1b[K\n", .{ Colors.cyan, restart_underline, Colors.green, restart_underline, restart_time_ms, Colors.reset });
             }
 
             printFirstLine(&restart_output);

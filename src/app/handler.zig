@@ -47,6 +47,9 @@ pub const Handler = struct {
             return try action(self, req, res);
 
         // Dev mode logging
+        const is_zx_path = std.mem.startsWith(u8, req.url.path, "/_zx/") or std.mem.startsWith(u8, req.url.path, "/assets/_zx/");
+        if (is_zx_path) return try action(self, req, res);
+
         var timer = try std.time.Timer.start();
 
         try action(self, req, res);
