@@ -102,6 +102,10 @@ fn dev(ctx: zli.CommandContext) !void {
     var runner = std.process.Child.init(&.{ runnable_program_path, "--cli-command", "dev" }, allocator);
     runner.stderr_behavior = .Pipe;
     runner.stdout_behavior = .Pipe;
+    defer {
+        _ = runner.kill() catch {};
+        _ = runner.wait() catch {};
+    }
 
     // Start timer for server startup
     var startup_timer = try std.time.Timer.start();
@@ -112,7 +116,6 @@ fn dev(ctx: zli.CommandContext) !void {
 
     try runner.spawn();
 
-    // Capture first line from stderr, then continue in transparent mode
     var runner_output = try util.captureChildOutput(ctx.allocator, &runner, .{
         .stderr = .{ .mode = .first_line_then_transparent, .target = .stderr },
         .stdout = .{ .mode = .transparent, .target = .stdout },
@@ -191,7 +194,11 @@ fn dev(ctx: zli.CommandContext) !void {
                 log.debug("Error bundling JavaScript! {any}", .{err});
             };
 
-            _ = try runner.kill();
+            _ = runner.kill() catch {};
+            _ = runner.wait() catch {};
+            runner_output.wait();
+            runner_output.deinit();
+
             if (builtin.os.tag == .windows) {
                 // remove the tmp and copy the new zx.exe
                 _ = try util.getRunnablePath(allocator, program_path);
@@ -207,21 +214,21 @@ fn dev(ctx: zli.CommandContext) !void {
                 }
             }
 
-            // Print restart message right before spawning
             const restart_underline = if (show_underline) Colors.underline else "";
             try ctx.writer.print("\n{s}{s}Restarting ZX App...{s}", .{ Colors.cyan, restart_underline, Colors.reset });
 
+            runner = std.process.Child.init(&.{ runnable_program_path, "--cli-command", "dev" }, allocator);
+            runner.stderr_behavior = .Pipe;
+            runner.stdout_behavior = .Pipe;
+
             try runner.spawn();
 
-            // Capture first line from stderr, then continue in transparent mode
-            var restart_output = try util.captureChildOutput(ctx.allocator, &runner, .{
+            runner_output = try util.captureChildOutput(ctx.allocator, &runner, .{
                 .stderr = .{ .mode = .first_line_then_transparent, .target = .stderr },
                 .stdout = .{ .mode = .transparent, .target = .stdout },
             });
-            defer restart_output.deinit();
 
-            // Wait for the first line to be captured, then print it synchronously
-            restart_output.waitForFirstLine();
+            runner_output.waitForFirstLine();
 
             // Elapsed time - show combined build + restart time
             const restart_time_ms = timer.lap() / std.time.ns_per_ms;
@@ -252,7 +259,7 @@ fn dev(ctx: zli.CommandContext) !void {
                 try ctx.writer.print("\r{s}{s}Restarting ZX App... {s}{s}done in {d:.0} ms{s}\x1b[K\n", .{ Colors.cyan, restart_underline, Colors.green, restart_underline, restart_time_ms, Colors.reset });
             }
 
-            printFirstLine(&restart_output);
+            printFirstLine(&runner_output);
 
             // Update binary mtime after restart to stay in sync
             const current_stat = std.fs.cwd().statFile(program_path) catch |err| {

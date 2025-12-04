@@ -1,4 +1,8 @@
 pub fn main() !void {
+    if (builtin.os.tag == .windows) {
+        _ = std.os.windows.kernel32.SetConsoleOutputCP(65001);
+    }
+
     var dbg = std.heap.DebugAllocator(.{}).init;
 
     const allocator = switch (@import("builtin").mode) {
