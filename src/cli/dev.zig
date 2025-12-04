@@ -6,19 +6,23 @@ pub fn register(writer: *std.Io.Writer, reader: *std.Io.Reader, allocator: std.m
 
     try cmd.addFlag(flag.binpath_flag);
     try cmd.addFlag(flag.build_args);
+    try cmd.addFlag(.{
+        .name = "progress",
+        .description = "Show full build progress output from zig build",
+        .type = .Bool,
+        .default_value = .{ .Bool = false },
+    });
 
     return cmd;
 }
 
-const MIN_RESTART_INTERVAL_NS = std.time.ns_per_ms * 10; // 10ms
-const MAX_RESTART_INTERVAL_NS = std.time.ns_per_ms * 300; // 300ms
-const INTERVAL_STEP_NS = std.time.ns_per_ms / 10; // Increase by 0.1ms each step
 const BIN_DIR = "zig-out/bin";
 
 fn dev(ctx: zli.CommandContext) !void {
     const allocator = ctx.allocator;
     const binpath = ctx.flag("binpath", []const u8);
     const build_args_str = ctx.flag("build-args", []const u8);
+    const show_progress = ctx.flag("progress", bool);
     var build_args = std.mem.splitSequence(u8, build_args_str, " ");
 
     var build_args_array = std.ArrayList([]const u8).empty;
@@ -46,12 +50,19 @@ fn dev(ctx: zli.CommandContext) !void {
     try build_args_array.append(allocator, "--watch");
     var builder = std.process.Child.init(build_args_array.items, allocator);
 
+    // Only pipe stderr if we're NOT showing progress (to suppress output)
+    if (!show_progress) {
+        builder.stderr_behavior = .Pipe;
+        builder.stdout_behavior = .Pipe;
+    }
+    // Otherwise use default .Inherit to show full build output
+
     try builder.spawn();
     defer _ = builder.kill() catch unreachable;
 
     const watch_cmd_str = try std.mem.join(allocator, " ", build_args_array.items);
     defer allocator.free(watch_cmd_str);
-    log.debug("Building with watch mode `{s}`", .{watch_cmd_str});
+    log.debug("Building with watch mode `{s}` (progress={any})", .{ watch_cmd_str, show_progress });
 
     log.debug("Building complete, finding ZX executable", .{});
     var program_meta = util.findprogram(allocator, binpath) catch |err| {
@@ -91,15 +102,57 @@ fn dev(ctx: zli.CommandContext) !void {
     runner_output.waitForFirstLine();
     printFirstLine(&runner_output);
 
-    var bin_mtime: i128 = 0;
-    var current_interval_ns: u64 = MIN_RESTART_INTERVAL_NS;
+    // Get initial binary modification time
+    const initial_stat = try std.fs.cwd().statFile(program_path);
+
+    // Create build watcher (only needed in silent mode)
+    var build_watcher: ?builder_util.BuildWatcher = if (!show_progress)
+        builder_util.BuildWatcher.init(
+            allocator,
+            builder.stderr.?,
+            program_path,
+            initial_stat.mtime,
+            ctx.writer,
+            true, // show_rebuild_messages
+        )
+    else
+        null;
+
+    // Spawn thread to watch build output (only in silent mode)
+    const watcher_thread: ?std.Thread = if (build_watcher) |*watcher|
+        try std.Thread.spawn(.{}, builder_util.watchBuildOutput, .{watcher})
+    else
+        null;
+    defer if (watcher_thread) |thread| thread.join();
+
+    // For progress mode: track binary mtime manually
+    var last_binary_mtime = initial_stat.mtime;
+    var last_restart_time_ns: i128 = 0;
 
     while (true) {
-        std.Thread.sleep(current_interval_ns);
-        const stat = try std.fs.cwd().statFile(program_path);
+        std.Thread.sleep(std.time.ns_per_ms * 1);
 
-        const should_restart = stat.mtime != bin_mtime and bin_mtime != 0;
+        // Check for restart condition
+        const should_restart = if (build_watcher) |*watcher|
+            watcher.shouldRestart()
+        else blk: {
+            // Progress mode: poll binary mtime manually
+            const stat = std.fs.cwd().statFile(program_path) catch continue;
+            const changed = stat.mtime != last_binary_mtime;
+            if (changed) {
+                const now = std.time.nanoTimestamp();
+                const time_since_last = now - last_restart_time_ns;
+                // Only restart if enough time has passed (debounce)
+                if (time_since_last >= std.time.ns_per_ms * 500) {
+                    last_binary_mtime = stat.mtime;
+                    break :blk true;
+                }
+            }
+            break :blk false;
+        };
+
         if (should_restart) {
+            log.debug("Processing restart request...", .{});
             var timer = try std.time.Timer.start();
 
             if (need_js_build) jsutil.buildjs(ctx, binpath, true, true) catch |err| {
@@ -112,11 +165,17 @@ fn dev(ctx: zli.CommandContext) !void {
                 _ = try util.getRunnablePath(allocator, program_path);
 
                 _ = try builder.kill();
+                if (!show_progress) {
+                    builder.stderr_behavior = .Pipe;
+                    builder.stdout_behavior = .Pipe;
+                }
                 try builder.spawn();
+                if (build_watcher) |*watcher| {
+                    watcher.builder_stderr = builder.stderr.?;
+                }
             }
 
             // Print restart message right before spawning (after all build/kill operations)
-            // Clear the current line (in case "watching..." text is there) and print without newline so we can overwrite it
             try ctx.writer.print("\r\x1b[2K{s}Restarting ZX App...{s}", .{ Colors.cyan, Colors.reset });
 
             try runner.spawn();
@@ -137,35 +196,24 @@ fn dev(ctx: zli.CommandContext) !void {
 
             printFirstLine(&restart_output);
 
-            // Reset interval to minimum when changes are detected
-            current_interval_ns = MIN_RESTART_INTERVAL_NS;
-            log.debug("Restart interval reset to {d}ms", .{current_interval_ns / std.time.ns_per_ms});
-        } else {
-            // Gradually increase interval up to maximum when no changes
-            if (current_interval_ns < MAX_RESTART_INTERVAL_NS) {
-                // const old_interval = current_interval_ns;
-                current_interval_ns = @min(current_interval_ns + INTERVAL_STEP_NS, MAX_RESTART_INTERVAL_NS);
-                // if (old_interval != current_interval_ns) {
-                //     log.debug("No changes detected, increasing restart interval to {d}ms", .{current_interval_ns / std.time.ns_per_ms});
-                // }
+            // Update binary mtime after restart to stay in sync
+            const current_stat = std.fs.cwd().statFile(program_path) catch |err| {
+                log.debug("Failed to stat binary after restart: {any}", .{err});
+                continue;
+            };
+
+            // Reset restart state
+            if (build_watcher) |*watcher| {
+                watcher.markRestartComplete(current_stat.mtime);
+            } else {
+                // Progress mode: update tracking variables
+                last_binary_mtime = current_stat.mtime;
+                last_restart_time_ns = std.time.nanoTimestamp();
             }
+            log.debug("Restart complete, ready for next build", .{});
         }
-        if (should_restart or bin_mtime == 0) bin_mtime = stat.mtime;
     }
 }
-
-const std = @import("std");
-const zli = @import("zli");
-const zx = @import("zx");
-const builtin = @import("builtin");
-
-const util = @import("shared/util.zig");
-const flag = @import("shared/flag.zig");
-const jsutil = @import("shared/js.zig");
-const tui = @import("../tui/main.zig");
-
-const Colors = tui.Colors;
-const log = std.log.scoped(.cli);
 
 /// Print the first captured line (prefer stderr, fallback to stdout)
 fn printFirstLine(output: *util.ChildOutput) void {
@@ -179,3 +227,17 @@ fn printFirstLine(output: *util.ChildOutput) void {
         }
     }
 }
+
+const std = @import("std");
+const zli = @import("zli");
+const zx = @import("zx");
+const builtin = @import("builtin");
+
+const util = @import("shared/util.zig");
+const flag = @import("shared/flag.zig");
+const jsutil = @import("shared/js.zig");
+const builder_util = @import("shared/builder.zig");
+const tui = @import("../tui/main.zig");
+
+const Colors = tui.Colors;
+const log = std.log.scoped(.cli);
