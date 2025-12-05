@@ -4,7 +4,9 @@ pub fn register(writer: *std.Io.Writer, reader: *std.Io.Reader, allocator: std.m
         .description = "Initialize a new ZX project in the current directory",
     }, init);
 
+    try cmd.addPositionalArg(init_path_arg);
     try cmd.addFlag(template_flag);
+    try cmd.addFlag(force_flag);
 
     return cmd;
 }
@@ -17,8 +19,62 @@ const template_flag = zli.Flag{
     .default_value = .{ .String = "default" },
 };
 
+const force_flag = zli.Flag{
+    .name = "force",
+    .shortcut = "f",
+    .description = "Force initialization even if the directory is not empty",
+    .type = .Bool,
+    .default_value = .{ .Bool = false },
+};
+
+const init_path_arg = zli.PositionalArg{
+    .name = "path",
+    .description = "Path to initialize the project in (default: current directory)",
+    .required = false,
+};
+
 fn init(ctx: zli.CommandContext) !void {
-    const t_val = ctx.flag("template", []const u8); // type-safe flag access
+    const t_val = ctx.flag("template", []const u8);
+    const force_init = ctx.flag("force", bool);
+    const init_path = std.mem.trim(u8, ctx.getArg("path") orelse ".", " ");
+
+    var printer = tui.Printer.init(ctx.allocator, .{ .file_path_mode = .flat, .file_tree_max_depth = 1 });
+    defer printer.deinit();
+
+    // Validations
+    const is_clean_dir = try isDirEmpty(init_path);
+    const has_init_path_arg = init_path.len > 0 and !std.mem.eql(u8, init_path, ".");
+    if (!is_clean_dir and !force_init) {
+        printer.warning("Directory is not empty.", .{});
+        try ctx.writer.print("\nYou may want either:\n\n", .{});
+        if (!has_init_path_arg)
+            try ctx.writer.print("  {s}zx init{s} {s}{s}{s}{s}  {s}# Create in a new directory{s}\n\n", .{
+                colors.cyan,
+                colors.reset,
+                colors.bold,
+                colors.gray,
+                "my-app",
+                colors.reset,
+                colors.gray,
+                colors.reset,
+            });
+        try ctx.writer.print("  {s}zx init{s} {s}{s}{s}{s}--force{s}  {s}# Create in current directory, overriding existing files{s}\n\n", .{
+            colors.cyan,
+            colors.reset,
+            colors.bold,
+            colors.gray,
+            if (has_init_path_arg) init_path else "",
+            if (has_init_path_arg) " " else "",
+            colors.reset,
+            colors.gray,
+            colors.reset,
+        });
+        return;
+    }
+
+    if (force_init and !is_clean_dir) {
+        std.debug.print("{s}Initializing with existing files, overriding if files already exist.{s}\n", .{ colors.yellow, colors.reset });
+    }
 
     const template_name = if (std.meta.stringToEnum(TemplateFile.Name, t_val)) |name| name else {
         std.debug.print("\x1b[33mUnknown template:\x1b[0m {s}\n\nTemplates:\n", .{t_val});
@@ -30,35 +86,14 @@ fn init(ctx: zli.CommandContext) !void {
         return;
     };
 
-    var printer = tui.Printer.init(ctx.allocator, .{ .file_path_mode = .flat, .file_tree_max_depth = 1 });
-    defer printer.deinit();
-
     printer.header("{s} Initializing ZX project!", .{tui.Printer.emoji("○")});
     printer.info("[{s}]", .{@tagName(template_name)});
-    const output_dir = ".";
 
-    try std.fs.cwd().makePath(output_dir);
-
-    // Check if build.zig.zon already exists
-    const build_zig_zon_path = try std.fs.path.join(ctx.allocator, &.{ output_dir, "build.zig.zon" });
-    defer ctx.allocator.free(build_zig_zon_path);
-
-    const cwd = std.fs.cwd();
-    if (cwd.openFile(build_zig_zon_path, .{})) |file| {
-        file.close();
-        printer.warning("build.zig.zon already exists in {s}/. Skipping template initialization.", .{output_dir});
-        return;
-    } else |err| {
-        switch (err) {
-            error.FileNotFound => {},
-            else => return err,
-        }
-    }
-
+    try std.fs.cwd().makePath(init_path);
     for (templates) |template| {
         if (template.name != null and template.name.? != template_name) continue;
 
-        const output_path = try std.fs.path.join(ctx.allocator, &.{ output_dir, template.path });
+        const output_path = try std.fs.path.join(ctx.allocator, &.{ init_path, template.path });
         defer ctx.allocator.free(output_path);
 
         if (std.fs.path.dirname(output_path)) |parent_dir| {
@@ -89,7 +124,24 @@ fn init(ctx: zli.CommandContext) !void {
         }
     }
 
-    printer.footer("Now run {s}\n\n{s}", .{ tui.Printer.emoji("→"), colors.Fns.cyan("zig build serve") });
+    if (has_init_path_arg) {
+        const suggested_cmd = try std.fmt.allocPrint(ctx.allocator, "cd {s} && zx dev", .{init_path});
+        defer ctx.allocator.free(suggested_cmd);
+        printer.footer("Now run {s}\n\n{s}{s}{s}", .{ tui.Printer.emoji("→"), colors.cyan, suggested_cmd, colors.reset });
+    } else {
+        printer.footer("Now run {s}\n\n{s}", .{ tui.Printer.emoji("→"), colors.Fns.cyan("zx dev") });
+    }
+}
+
+pub fn isDirEmpty(path: []const u8) !bool {
+    var dir = std.fs.cwd().openDir(path, .{}) catch |err| switch (err) {
+        error.FileNotFound => return true,
+        else => return err,
+    };
+    defer dir.close();
+
+    var iter = dir.iterate();
+    return try iter.next() == null;
 }
 
 const TemplateFile = struct {

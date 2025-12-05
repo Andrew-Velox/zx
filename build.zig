@@ -82,6 +82,7 @@ pub fn build(b: *std.Build) !void {
                 .cli_path = null,
                 .site_outdir = "site/.zx",
                 .site_path = "site",
+                .experimental_enabled_csr = true,
             });
         }
     }

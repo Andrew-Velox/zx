@@ -30,7 +30,7 @@ async function main() {
   Bun.build({
     entrypoints: [join(pkgDir, "src/index.ts"), join(pkgDir, "src/react/index.ts"), join(pkgDir, "src/wasm/index.ts")],
     outdir: pkgDistDir,
-    minify: true,
+    // minify: true,
   });
 
   // Generate TypeScript declaration files
