@@ -3,8 +3,19 @@ const std = @import("std");
 /// Options for initializing a ZX project
 pub const ZxInitOptions = struct {
     const CliOptions = struct {
-        /// Path to the ZX CLI executable, if null then the ZX CLI will be used from system path (`zx`)
+        const Steps = struct {
+            serve: []const u8 = "serve",
+            dev: ?[]const u8 = null,
+            @"export": ?[]const u8 = null,
+            bundle: ?[]const u8 = null,
+        };
+        /// Path to the ZX CLI executable, if null then the ZX CLI will be used from source of ZX dependency
+        /// If you want to use the ZX CLI from the system path, you can set the path to `zx`
         path: ?[]const u8 = null,
+
+        steps: ?Steps = .{
+            .serve = "serve",
+        },
     };
 
     const SiteOptions = struct {
@@ -20,7 +31,7 @@ pub const ZxInitOptions = struct {
     // It is recommended to use the default options, but you can override them if you want to
     site: ?SiteOptions = null,
 
-    /// Options for the ZX CLI, if null then the ZX CLI will be used from the soure of ZX dependency
+    /// Options for the ZX CLI
     cli: ?CliOptions = null,
 
     /// Experimental options, if null then the experimental options will be used from the source of ZX dependency
@@ -29,8 +40,11 @@ pub const ZxInitOptions = struct {
 
 const default_inner_opts: InitInnerOptions = .{
     .site_path = "site",
-    .cli_path = "zx",
+    .cli_path = null,
     .site_outdir = null,
+    .steps = .{
+        .serve = "serve",
+    },
 };
 
 pub fn init(b: *std.Build, exe: *std.Build.Step.Compile, options: ZxInitOptions) !void {
@@ -57,6 +71,10 @@ pub fn init(b: *std.Build, exe: *std.Build.Step.Compile, options: ZxInitOptions)
         opts.experimental_enabled_csr = experimental_opts.enabled_csr;
     }
 
+    if (options.cli) |cli_opts| {
+        opts.steps = cli_opts.steps;
+    }
+
     return initInner(b, exe, zx_exe, zx_module, zx_wasm_module, opts);
 }
 
@@ -64,6 +82,9 @@ const InitInnerOptions = struct {
     site_path: []const u8,
     cli_path: ?[]const u8,
     site_outdir: ?[]const u8 = null,
+    steps: ZxInitOptions.CliOptions.Steps = .{
+        .serve = "serve",
+    },
 
     experimental_enabled_csr: bool = false,
 };
@@ -107,7 +128,7 @@ pub fn initInner(
     var site_dir = try site_path.root_dir.handle.openDir(site_path.subPathOrDot(), .{ .iterate = true });
     var itd = try site_dir.walk(transpile_cmd.step.owner.allocator);
     defer itd.deinit();
-    while (itd.next() catch @panic("OOM")) |entry| {
+    while (try itd.next()) |entry| {
         switch (entry.kind) {
             .directory => {},
             .file => {
@@ -166,11 +187,41 @@ pub fn initInner(
         post_transpile_cmd.step.dependOn(&wasm_exe.step);
         b.default_step.dependOn(&post_transpile_cmd.step);
     }
+
     // --- Steps: Serve --- //
-    const serve_step = b.step("serve", "Run the Zx website");
-    const serve_cmd = b.addRunArtifact(exe);
-    serve_cmd.step.dependOn(b.getInstallStep());
-    serve_cmd.step.dependOn(&transpile_cmd.step);
-    serve_step.dependOn(&serve_cmd.step);
-    if (b.args) |args| serve_cmd.addArgs(args);
+    {
+        const serve_step = b.step("serve", "Run the Zx website");
+        const serve_cmd = b.addRunArtifact(exe);
+        serve_cmd.step.dependOn(b.getInstallStep());
+        serve_cmd.step.dependOn(&transpile_cmd.step);
+        serve_step.dependOn(&serve_cmd.step);
+        if (b.args) |args| serve_cmd.addArgs(args);
+    }
+
+    // --- Steps: Dev --- //
+    if (opts.steps.dev) |dev_step_name| {
+        const dev_cmd = getZxRun(b, zx_exe, opts);
+        dev_cmd.addArgs(&.{"dev"});
+        const dev_step = b.step(dev_step_name, "Run the Zx website in development mode");
+        dev_step.dependOn(&dev_cmd.step);
+        if (b.args) |args| dev_cmd.addArgs(args);
+    }
+
+    // --- Steps: Export --- //
+    if (opts.steps.@"export") |export_step_name| {
+        const export_cmd = getZxRun(b, zx_exe, opts);
+        export_cmd.addArgs(&.{"export"});
+        const export_step = b.step(export_step_name, "Export the Zx website");
+        export_step.dependOn(&export_cmd.step);
+        if (b.args) |args| export_cmd.addArgs(args);
+    }
+
+    // --- Steps: Bundle --- //
+    if (opts.steps.bundle) |bundle_step_name| {
+        const bundle_cmd = getZxRun(b, zx_exe, opts);
+        bundle_cmd.addArgs(&.{"bundle"});
+        const bundle_step = b.step(bundle_step_name, "Bundle the Zx website");
+        bundle_step.dependOn(&bundle_cmd.step);
+        if (b.args) |args| bundle_cmd.addArgs(args);
+    }
 }

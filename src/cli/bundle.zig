@@ -47,7 +47,7 @@ fn bundle(ctx: zli.CommandContext) !void {
     const build_args = ctx.flag("build-args", []const u8);
 
     var app_meta = util.findprogram(ctx.allocator, binpath) catch |err| {
-        if (err == error.FileNotFound) {
+        if (err == error.FileNotFound or err == error.ProgramNotFound) {
             try ctx.writer.print("Run \x1b[34mzig build\x1b[0m to build the ZX executable first!\n", .{});
             return;
         }

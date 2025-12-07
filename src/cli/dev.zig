@@ -7,6 +7,13 @@ pub fn register(writer: *std.Io.Writer, reader: *std.Io.Reader, allocator: std.m
     try cmd.addFlag(flag.binpath_flag);
     try cmd.addFlag(flag.build_args);
     try cmd.addFlag(.{
+        .name = "port",
+        .description = "Port to run the server on (0 means default or configured port)",
+        .type = .Int,
+        .default_value = .{ .Int = 0 },
+        .hidden = true,
+    });
+    try cmd.addFlag(.{
         .name = "progress",
         .description = "Show full build progress output from zig build",
         .type = .Bool,
@@ -39,6 +46,9 @@ const BIN_DIR = "zig-out/bin";
 fn dev(ctx: zli.CommandContext) !void {
     const allocator = ctx.allocator;
     const binpath = ctx.flag("binpath", []const u8);
+    const port = ctx.flag("port", u32);
+    const port_str = try std.fmt.allocPrint(ctx.allocator, "{d}", .{port});
+    defer ctx.allocator.free(port_str);
     const build_args_str = ctx.flag("build-args", []const u8);
     const show_progress = ctx.flag("progress", bool);
     const show_underline = ctx.flag("tui-underline", bool);
@@ -47,18 +57,18 @@ fn dev(ctx: zli.CommandContext) !void {
     var build_args = std.mem.splitSequence(u8, build_args_str, " ");
 
     var build_args_array = std.ArrayList([]const u8).empty;
-    try build_args_array.append(allocator, "zig");
-    try build_args_array.append(allocator, "build");
+    try build_args_array.appendSlice(allocator, &.{ "zig", "build" });
     while (build_args.next()) |arg| {
         const trimmed_arg = std.mem.trim(u8, arg, " ");
         if (std.mem.eql(u8, trimmed_arg, "")) continue;
-        try build_args_array.append(allocator, trimmed_arg);
+        try build_args_array.appendSlice(allocator, &.{trimmed_arg});
     }
 
     jsutil.buildjs(ctx, binpath, true, false) catch |err| {
         log.debug("Error building JavaScript! {any}", .{err});
     };
 
+    // Build one time first before entering the watch mode
     {
         const build_cmd_str = try std.mem.join(allocator, " ", build_args_array.items);
         defer allocator.free(build_cmd_str);
@@ -68,14 +78,7 @@ fn dev(ctx: zli.CommandContext) !void {
         _ = try build_builder.wait();
     }
 
-    try build_args_array.append(allocator, "--watch");
-
-    // Add --summary all in silent mode to get detailed timing info
-    // if (!show_progress) {
-    try build_args_array.append(allocator, "--summary");
-    try build_args_array.append(allocator, "all");
-    // }
-
+    try build_args_array.appendSlice(allocator, &.{ "--watch", "--summary", "all" });
     var builder = std.process.Child.init(build_args_array.items, allocator);
 
     // Only pipe stderr if we're NOT showing progress (to suppress output)
@@ -113,9 +116,15 @@ fn dev(ctx: zli.CommandContext) !void {
         if (err == error.PackageJsonNotFound) need_js_build = false;
     };
 
-    var runner = std.process.Child.init(&.{ runnable_program_path, "--cli-command", "dev" }, allocator);
+    var runner_args = std.ArrayList([]const u8).empty;
+    defer runner_args.deinit(allocator);
+    try runner_args.appendSlice(allocator, &.{ runnable_program_path, "--cli-command", "dev" });
+    if (port != 0) try runner_args.appendSlice(allocator, &.{ "--port", port_str });
+
+    var runner = std.process.Child.init(runner_args.items, allocator);
     runner.stderr_behavior = .Pipe;
     runner.stdout_behavior = .Pipe;
+
     defer {
         _ = runner.kill() catch {};
         _ = runner.wait() catch {};
