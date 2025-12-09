@@ -3,10 +3,14 @@
 ```lua
 -- ~/.config/nvim/lua/plugins/zx.lua
 return {
-    "zx",
-    dir = "/Users/nurulhudaapon/Projects/nurulhudaapon/zx/editor/neovim",
+    "nurulhudaapon/zx",
     dependencies = { "nvim-treesitter/nvim-treesitter" },
-    init = function() vim.filetype.add({ extension = { zx = "zx" } }) end,
     ft = "zx",
+    init = function() vim.filetype.add({ extension = { zx = "zx" } }) end,
+    config = function()
+        vim.opt.runtimepath:prepend(vim.fn.stdpath("data") .. "/lazy/zx/editor/neovim")
+        vim.cmd("runtime! plugin/zx.lua")
+    end,
 }
+
 ```
