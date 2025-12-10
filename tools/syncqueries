@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# Script to link tree-sitter-zx query files to editor directories
+
+# Get the script's directory (project root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source and destination directories
+SOURCE_DIR="$SCRIPT_DIR/tree-sitter-zx/queries"
+ZED_DIR="$SCRIPT_DIR/editor/zed/languages/zx"
+NEOVIM_DIR="$SCRIPT_DIR/editor/neovim/queries/zx"
+
+# Ensure destination directories exist
+mkdir -p "$ZED_DIR"
+mkdir -p "$NEOVIM_DIR"
+
+# Function to create symbolic links
+link_files() {
+    local dest_dir="$1"
+    local editor_name="$2"
+    
+    echo "Linking .scm files to $editor_name..."
+    
+    for file in "$SOURCE_DIR"/*.scm; do
+        if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            dest_file="$dest_dir/$filename"
+            
+            # Remove existing file or link if it exists
+            if [ -e "$dest_file" ] || [ -L "$dest_file" ]; then
+                rm "$dest_file"
+                echo "  Removed existing: $filename"
+            fi
+            
+            # Create symbolic link
+            ln -s "$file" "$dest_file"
+            echo "  Linked: $filename"
+        fi
+    done
+    
+    echo ""
+}
+
+# Link files to both editors
+link_files "$ZED_DIR" "Zed"
+link_files "$NEOVIM_DIR" "Neovim"
+
+echo "Done! All .scm files have been linked."
+echo ""
+echo "Source: $SOURCE_DIR"
+echo "Destinations:"
+echo "  - $ZED_DIR"
+echo "  - $NEOVIM_DIR"
+

@@ -3,7 +3,7 @@ use zed_extension_api::{self as zed, serde_json, settings::LspSettings, Language
 
 const ZIG_TEST_EXE_BASENAME: &str = "zig_test";
 
-struct ZigExtension {
+struct ZxExtension {
     cached_binary_path: Option<String>,
 }
 
@@ -14,7 +14,7 @@ struct ZlsBinary {
     environment: Option<Vec<(String, String)>>,
 }
 
-impl ZigExtension {
+impl ZxExtension {
     fn language_server_binary(
         &mut self,
         language_server_id: &LanguageServerId,
@@ -137,7 +137,7 @@ impl ZigExtension {
     }
 }
 
-impl zed::Extension for ZigExtension {
+impl zed::Extension for ZxExtension {
     fn new() -> Self {
         Self {
             cached_binary_path: None,
@@ -305,4 +305,4 @@ fn get_test_exe_path() -> Option<String> {
     Some(test_exe_dir.join(name).to_string_lossy().into_owned())
 }
 
-zed::register_extension!(ZigExtension);
+zed::register_extension!(ZxExtension);
