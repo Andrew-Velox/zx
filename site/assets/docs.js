@@ -21,10 +21,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Update the code element with formatted content
         codeElement.textContent = formatted;
         
-        // Re-highlight with Prism.js if available
-        if (typeof Prism !== 'undefined') {
-          Prism.highlightElement(codeElement);
-        }
       } catch (error) {
         // console.error("Error formatting HTML:", error);
       }

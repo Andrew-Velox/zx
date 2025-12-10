@@ -710,21 +710,47 @@ body {
     color: var(--zx-white);
 }
 
-.code-example .keyword {
-    color: #c792ea;
-}
-
-.code-example .string {
-    color: #c3e88d;
-}
-
-.code-example .function {
-    color: #82aaff;
-}
-
-.code-example .comment {
-    color: #546e7a;
-}
+/* Tree-sitter syntax highlighting - ZX Home Theme (Material Ocean) */
+.code-example .attribute { color: #f78c6c; }
+.code-example .comment { font-style: italic; color: #546e7a; }
+.code-example .constant { color: #89ddff; }
+.code-example .constant.builtin { color: #89ddff; }
+.code-example .constructor { color: #c792ea; }
+.code-example .function { color: #82aaff; }
+.code-example .function.builtin { color: #82aaff; }
+.code-example .keyword { color: #c792ea; }
+.code-example .keyword.function { color: #c792ea; }
+.code-example .keyword.return { color: #c792ea; }
+.code-example .keyword.operator { color: #89ddff; }
+.code-example .keyword.modifier { color: #c792ea; }
+.code-example .keyword.type { color: #c792ea; }
+.code-example .keyword.conditional { color: #c792ea; }
+.code-example .keyword.repeat { color: #c792ea; }
+.code-example .keyword.import { color: #c792ea; }
+.code-example .keyword.exception { color: #c792ea; }
+.code-example .keyword.coroutine { color: #c792ea; }
+.code-example .module { color: #c792ea; }
+.code-example .number { color: #f78c6c; }
+.code-example .number.float { color: #f78c6c; }
+.code-example .operator { color: #89ddff; }
+.code-example .property { color: #f78c6c; }
+.code-example .property.builtin { color: #f78c6c; }
+.code-example .punctuation { color: #89ddff; }
+.code-example .punctuation.bracket { color: #89ddff; }
+.code-example .punctuation.delimiter { color: #89ddff; }
+.code-example .punctuation.special { color: #89ddff; }
+.code-example .string { color: #c3e88d; }
+.code-example .string.special { color: #c3e88d; }
+.code-example .string.escape { color: #eeffff; }
+.code-example .tag { color: #f07178; }
+.code-example .type { color: #ffcb6b; }
+.code-example .type.builtin { color: #ffcb6b; }
+.code-example .variable { color: #eeffff; }
+.code-example .variable.builtin { color: #82aaff; }
+.code-example .variable.parameter { color: #f78c6c; }
+.code-example .variable.member { color: #eeffff; }
+.code-example .label { color: #c792ea; }
+.code-example .boolean { color: #f78c6c; }
 
 /* Performance Section */
 .performance {

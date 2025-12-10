@@ -17,9 +17,6 @@ pub fn Sidebar(allocator: zx.Allocator, props: SidebarProps) zx.Component {
 
     return (
         <div  @allocator={allocator}>
-                    
-            <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/themes/prism.min.css" rel="stylesheet" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
-            <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.30.0/themes/prism-tomorrow.min.css" rel="stylesheet" media="(prefers-color-scheme: dark)">
             <link rel="stylesheet" href={css_version}>
             <header class="top-bar">
                 <div class="top-bar-content">

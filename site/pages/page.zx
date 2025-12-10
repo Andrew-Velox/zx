@@ -34,6 +34,8 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
     };
 
     const overview_code = @embedFile("../../pages//examples//overview.zx");
+    const util = @import("./docs/util.zig");
+    const overview_code_highlighted = util.highlightZx(allocator, overview_code) catch overview_code;
 
     return (
         <div @allocator={allocator}>
@@ -121,7 +123,7 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
                             </div>
                             <div class="code-example-title">example.zx</div>
                         </div>
-                        <pre><code class="language-tsx">{overview_code}</code></pre>
+                        <pre><code class="hljs">{[overview_code_highlighted:s]}</code></pre>
                     </div>
                 </div>
             </section>

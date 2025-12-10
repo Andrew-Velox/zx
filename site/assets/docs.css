@@ -731,7 +731,6 @@ code {
     color: var(--text-color);
 }
 
-/* Code blocks in dark mode - let Prism theme handle colors */
 @media (prefers-color-scheme: dark) {
     code,
     pre code {
@@ -1262,7 +1261,6 @@ code.hljs {
     .boolean { color: #79c0ff; }
 }
 
-/* Prism.js overrides */
 pre[class*="language-"] {
     background: var(--code-bg) !important;
     border-radius: 8px;
