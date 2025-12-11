@@ -75,14 +75,12 @@ pub const BuildWatcher = struct {
     last_restart_time_ns: i128,
     binary_path: []const u8,
     last_binary_mtime: i128,
-    build_completed: bool,
     build_stats: BuildStats, // Parsed build statistics
-    build_output: std.ArrayList(u8), // Buffered build output
-    has_errors: bool, // Whether the current build has errors
-    errors_shown: bool, // Whether errors have been displayed for current build
+    build_output: std.ArrayList(u8), // Buffered build output for current build
+    current_build_has_errors: bool, // Whether the current build has errors
+    error_output_ready: bool, // Whether error output is ready to be displayed
     previous_build_had_errors: bool, // Whether the previous build had errors
     show_resolved_message: bool, // Whether to show "errors resolved" message
-    in_build_summary: bool, // Whether we're currently in the build summary section
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -100,14 +98,12 @@ pub const BuildWatcher = struct {
             .last_restart_time_ns = 0,
             .binary_path = binary_path,
             .last_binary_mtime = initial_mtime,
-            .build_completed = false,
             .build_stats = BuildStats.init(),
             .build_output = std.ArrayList(u8).empty,
-            .has_errors = false,
-            .errors_shown = false,
+            .current_build_has_errors = false,
+            .error_output_ready = false,
             .previous_build_had_errors = false,
             .show_resolved_message = false,
-            .in_build_summary = false,
         };
     }
 
@@ -122,7 +118,6 @@ pub const BuildWatcher = struct {
         defer self.mutex.unlock();
         const result = self.should_restart;
         self.should_restart = false;
-        self.build_completed = false;
         return result;
     }
 
@@ -132,19 +127,15 @@ pub const BuildWatcher = struct {
         self.restart_pending = false;
         self.last_restart_time_ns = std.time.nanoTimestamp();
         self.last_binary_mtime = new_mtime;
-
-        // Reset error state for next build
-        self.has_errors = false;
-        self.errors_shown = false;
     }
 
-    /// Check if the current build has errors and return the output if so
-    /// Returns output only once per build (until errors_shown is reset)
+    /// Check if there are errors to display and return the output
+    /// Returns the error output once, then clears the flag
     pub fn checkErrors(self: *BuildWatcher) ?[]const u8 {
         self.mutex.lock();
         defer self.mutex.unlock();
-        if (self.has_errors and !self.errors_shown and self.build_output.items.len > 0) {
-            self.errors_shown = true;
+        if (self.error_output_ready and self.build_output.items.len > 0) {
+            self.error_output_ready = false;
             return self.build_output.items;
         }
         return null;
@@ -170,6 +161,7 @@ pub fn watchBuildOutput(watcher: *BuildWatcher) !void {
     defer pattern_buf.deinit(watcher.allocator);
     var line_buf = std.ArrayList(u8).empty;
     defer line_buf.deinit(watcher.allocator);
+    var build_in_progress = false;
 
     log.debug("Build watcher thread started", .{});
 
@@ -181,53 +173,40 @@ pub fn watchBuildOutput(watcher: *BuildWatcher) !void {
         };
         if (bytes_read == 0) break;
 
-        // Reset build stats and output buffer when new build starts
-        watcher.mutex.lock();
-        const is_new_build = watcher.first_build_done and !watcher.build_completed;
-        if (is_new_build) {
+        const chunk = buf[0..bytes_read];
+
+        // Detect start of new build (any output after first build means new build starting)
+        if (watcher.first_build_done and !build_in_progress) {
+            build_in_progress = true;
+            watcher.mutex.lock();
             watcher.build_stats = BuildStats.init();
             watcher.build_output.clearRetainingCapacity();
-            watcher.has_errors = false;
-            watcher.errors_shown = false;
-            watcher.in_build_summary = false;
-            log.debug("Build started", .{});
-        }
-        watcher.mutex.unlock();
-
-        // Capture the output for potential error display
-        watcher.mutex.lock();
-        try watcher.build_output.appendSlice(watcher.allocator, buf[0..bytes_read]);
-        watcher.mutex.unlock();
-
-        // Check if we've entered the build summary section
-        const chunk = buf[0..bytes_read];
-        if (std.mem.indexOf(u8, chunk, "Build Summary:") != null) {
-            watcher.mutex.lock();
-            watcher.in_build_summary = true;
+            watcher.current_build_has_errors = false;
+            watcher.error_output_ready = false;
             watcher.mutex.unlock();
+            log.debug("New build started", .{});
         }
 
-        // Check for error indicators in the output (but NOT in build summary)
+        // Capture all output for error display
         watcher.mutex.lock();
-        const should_check_errors = !watcher.in_build_summary;
+        try watcher.build_output.appendSlice(watcher.allocator, chunk);
         watcher.mutex.unlock();
 
-        if (should_check_errors) {
-            if (std.mem.indexOf(u8, chunk, "error:") != null or
-                std.mem.indexOf(u8, chunk, "Error:") != null or
-                std.mem.indexOf(u8, chunk, "stderr") != null or
-                std.mem.indexOf(u8, chunk, "ERROR:") != null)
-            {
-                watcher.mutex.lock();
-                watcher.has_errors = true;
-                watcher.mutex.unlock();
-            }
+        // Check for error indicators in the output
+        if (std.mem.indexOf(u8, chunk, "error:") != null or
+            std.mem.indexOf(u8, chunk, "Error:") != null or
+            std.mem.indexOf(u8, chunk, "stderr") != null or
+            std.mem.indexOf(u8, chunk, "ERROR:") != null)
+        {
+            watcher.mutex.lock();
+            watcher.current_build_has_errors = true;
+            watcher.mutex.unlock();
+            log.debug("Error detected in build output", .{});
         }
 
         // Process bytes line by line to parse build stats
-        for (buf[0..bytes_read]) |byte| {
+        for (chunk) |byte| {
             if (byte == '\n') {
-                // Process complete line
                 if (line_buf.items.len > 0) {
                     watcher.mutex.lock();
                     watcher.build_stats.parseLine(line_buf.items);
@@ -239,8 +218,8 @@ pub fn watchBuildOutput(watcher: *BuildWatcher) !void {
             }
         }
 
-        // Also accumulate to detect "Build Summary:"
-        try pattern_buf.appendSlice(watcher.allocator, buf[0..bytes_read]);
+        // Accumulate to detect "Build Summary:"
+        try pattern_buf.appendSlice(watcher.allocator, chunk);
 
         if (pattern_buf.items.len > 1024) {
             const keep_from = pattern_buf.items.len - 512;
@@ -248,70 +227,66 @@ pub fn watchBuildOutput(watcher: *BuildWatcher) !void {
             pattern_buf.shrinkRetainingCapacity(512);
         }
 
-        // Detect build completion
+        // Detect build completion via "Build Summary:"
         if (std.mem.indexOf(u8, pattern_buf.items, "Build Summary:") != null) {
             const now = std.time.nanoTimestamp();
-
             log.debug("Build Summary detected", .{});
 
             const stat = std.fs.cwd().statFile(watcher.binary_path) catch |err| {
                 log.debug("Failed to stat binary: {any}", .{err});
                 pattern_buf.clearRetainingCapacity();
+                build_in_progress = false;
                 continue;
             };
 
             watcher.mutex.lock();
+            defer watcher.mutex.unlock();
 
             const binary_changed = stat.mtime != watcher.last_binary_mtime;
-            const already_handled = watcher.build_completed;
 
-            if (!already_handled and watcher.first_build_done) {
+            if (watcher.first_build_done) {
+                // Build completed
                 if (binary_changed and !watcher.restart_pending) {
+                    // Binary changed - successful build, trigger restart
                     const time_since_last_restart = now - watcher.last_restart_time_ns;
-
                     if (time_since_last_restart >= RESTART_COOLDOWN_NS) {
                         watcher.should_restart = true;
                         watcher.restart_pending = true;
                         watcher.last_binary_mtime = stat.mtime;
-                        watcher.build_completed = true;
-
-                        // Check if we resolved errors (previous had errors, current doesn't)
-                        if (watcher.previous_build_had_errors and !watcher.has_errors) {
-                            watcher.show_resolved_message = true;
-                        }
-
-                        // Update previous build error state for next time
-                        watcher.previous_build_had_errors = watcher.has_errors;
-
-                        log.debug("Build completed successfully, triggering restart", .{});
+                        log.debug("Build successful, triggering restart", .{});
                     }
-                } else if (!binary_changed and watcher.has_errors) {
-                    // Build completed and we detected errors during build (not cached)
-                    watcher.build_completed = true;
-                    watcher.previous_build_had_errors = true;
-                    log.debug("Build failed with errors", .{});
-                } else if (!binary_changed and !watcher.has_errors) {
-                    // Binary didn't change but no errors detected - likely cached build, no action needed
-                    watcher.build_completed = true;
-
-                    // If previous build had errors and this one doesn't, it means cached success
+                } else if (watcher.current_build_has_errors) {
+                    // Build failed with errors - make output ready to display
+                    watcher.error_output_ready = true;
+                    log.debug("Build failed with errors, output ready to display", .{});
+                } else if (!watcher.current_build_has_errors and !binary_changed) {
+                    // Build completed without errors and no binary change (cached success)
+                    // Check if previous build had errors - if so, show resolved message
                     if (watcher.previous_build_had_errors) {
                         watcher.show_resolved_message = true;
-                        watcher.previous_build_had_errors = false;
+                        log.debug("Build cached successfully after errors, will show resolved message", .{});
                     }
-
-                    log.debug("Build completed (cached, no changes)", .{});
                 }
-            } else if (!watcher.first_build_done) {
+
+                // Check if errors were just resolved (current success after previous errors with binary change)
+                if (binary_changed and watcher.previous_build_had_errors and !watcher.current_build_has_errors) {
+                    watcher.show_resolved_message = true;
+                    log.debug("Errors resolved with new build, will show resolved message", .{});
+                }
+
+                // Update previous build error state
+                watcher.previous_build_had_errors = watcher.current_build_has_errors;
+            } else {
+                // First build
                 watcher.first_build_done = true;
                 watcher.last_binary_mtime = stat.mtime;
                 watcher.last_restart_time_ns = std.time.nanoTimestamp();
-                log.debug("First build detected", .{});
+                watcher.previous_build_had_errors = watcher.current_build_has_errors;
+                log.debug("First build completed", .{});
             }
 
-            watcher.mutex.unlock();
-
             pattern_buf.clearRetainingCapacity();
+            build_in_progress = false;
         }
     }
 }

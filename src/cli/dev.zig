@@ -222,9 +222,6 @@ fn dev(ctx: zli.CommandContext) !void {
 
             // Check if errors were resolved (for cached builds that don't trigger restart)
             if (watcher.shouldShowResolvedMessage()) {
-                if (show_underline) {
-                    try ctx.writer.print("{s}─────────────────────────────────────────{s}\n", .{ Colors.gray, Colors.reset });
-                }
                 try ctx.writer.print("{s}✓ All build errors have been resolved!{s}\n", .{ Colors.green, Colors.reset });
                 if (show_underline) {
                     try ctx.writer.print("{s}─────────────────────────────────────────{s}\n", .{ Colors.gray, Colors.reset });
