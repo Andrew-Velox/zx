@@ -217,10 +217,11 @@ pub fn initInner(
                     }
                     switch (command.type) {
                         .before_transpile => {
-                            sys_cmd.step.dependOn(&transpile_cmd.step);
+                            transpile_cmd.step.dependOn(&sys_cmd.step);
                         },
                         .after_transpile => {
-                            transpile_cmd.step.dependOn(&sys_cmd.step);
+                            sys_cmd.step.dependOn(&transpile_cmd.step);
+                            exe.step.dependOn(&sys_cmd.step);
                         },
                     }
                 },
