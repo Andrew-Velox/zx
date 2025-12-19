@@ -161,7 +161,6 @@ const template_dir = "init/template";
 
 const templates = [_]TemplateFile{
     // Shared
-    .{ .path = ".vscode/extensions.json", .content = @embedFile(template_dir ++ "/.vscode/extensions.json") },
     .{ .path = "build.zig.zon", .content = @embedFile(template_dir ++ "/build.zig.zon") },
     // .{ .path = "build.zig", .content = @embedFile(template_dir ++ "/build.zig"), .lines = &.{ .{ 1, 28 }, .{ 30, 32 } } },
     .{ .path = "README.md", .content = @embedFile(template_dir ++ "/README.md") },

@@ -20,9 +20,7 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
                     
                     <h3>Key Features</h3>
                     <ul>
-                        {for (features) |feature| (
-                            <li>{feature}</li>
-                        )}
+                        {for (features) |feature| (<li>{feature}</li>)}
                     </ul>
                     
                     <h3>Why ZX?</h3>
