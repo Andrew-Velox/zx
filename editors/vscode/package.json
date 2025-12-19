@@ -2,7 +2,7 @@
   "name": "zx",
   "displayName": "ZX",
   "description": "ZX let's you write HTML within your Zig code.",
-  "version": "0.0.13",
+  "version": "0.1.358",
   "publisher": "nurulhudaapon",
   "icon": "images/zx-icon.png",
   "private": true,
@@ -88,8 +88,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "rm -rf out && tsc -b",
     "watch": "tsc -b -w",
-    "fmt": "bunx prettier . --write",
-    "test": "bun test"
+    "fmt": "prettier . --write"
   },
   "dependencies": {
     "vscode-html-languageservice": "^5.6.0",

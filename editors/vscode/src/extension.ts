@@ -1,3 +1,5 @@
+import * as childProcess from "child_process";
+import * as util from "util";
 import * as vscode from "vscode";
 import { ExtensionContext, window, workspace } from "vscode";
 
@@ -9,10 +11,11 @@ import {
 
 import { getZLSPath } from "./util";
 
-import { formatZx, preCompileZigFmt } from "./fmt/fmt";
-import { registerHtmlAutoCompletion } from "./autocompletel/htmlautoCompletetion";
+import { registerHtmlAutoCompletion } from "./complete/html";
 
 let client: LanguageClient;
+
+const execFile = util.promisify(childProcess.execFile);
 
 export function activate(context: ExtensionContext) {
   const serverCommand = getZLSPath(context);
@@ -23,9 +26,6 @@ export function activate(context: ExtensionContext) {
     );
     return;
   }
-
-  // Warm up zig fmt process to avoid JIT compilation delay on first format
-  preCompileZigFmt();
 
   const serverOptions: ServerOptions = {
     command: serverCommand,
@@ -41,15 +41,8 @@ export function activate(context: ExtensionContext) {
     traceOutputChannel: outputChannel,
     outputChannel,
     middleware: {
-      async provideDocumentFormattingEdits(document, options, token, next) {
-        const enableZigExpression = vscode.workspace
-          .getConfiguration("zx")
-          .get<boolean>("format.enableZigExpression", false);
-
-        const result = provideFormattingEdits(document, options, token);
-        console.log(result);
-
-        return result;
+      async provideDocumentFormattingEdits(document, _options, token, _next) {
+        return formatWithZxCli(document, token);
       },
       async provideHover(uri, position, token, next) {
         const hover = await next(uri, position, token);
@@ -82,60 +75,6 @@ export function activate(context: ExtensionContext) {
     clientOptions,
   );
 
-  // Register virtual document providers
-  const virtualZigDocumentContents = new Map<string, string>();
-  const virtualHtmlDocumentContents = new Map<string, string>();
-
-  // Virtual document provider for Zig content
-  context.subscriptions.push(
-    workspace.registerTextDocumentContentProvider("embedded-content-fmt-zig", {
-      provideTextDocumentContent: (uri) => {
-        const originalUri = uri.path.slice(1).slice(0, -4); // Remove leading '/' and '.zig'
-        const decodedUri = decodeURIComponent(originalUri);
-        return virtualZigDocumentContents.get(decodedUri);
-      },
-    }),
-  );
-
-  // Virtual document provider for HTML content
-  context.subscriptions.push(
-    workspace.registerTextDocumentContentProvider("embedded-content-fmt-html", {
-      provideTextDocumentContent: (uri) => {
-        const originalUri = uri.path.slice(1).slice(0, -5); // Remove leading '/' and '.html'
-        const decodedUri = decodeURIComponent(originalUri);
-        return virtualHtmlDocumentContents.get(decodedUri);
-      },
-    }),
-  );
-
-  // Helper function to format using virtual documents
-  async function provideFormattingEdits(
-    document: vscode.TextDocument,
-    options: vscode.FormattingOptions,
-    token: vscode.CancellationToken,
-  ): Promise<vscode.TextEdit[] | null> {
-    const documentText = document.getText();
-    const originalUri = document.uri.toString(true);
-
-    // Use the high-level formatZx function to format the entire document
-    const result = await formatZx(
-      documentText,
-      token,
-      originalUri,
-      virtualHtmlDocumentContents,
-    );
-
-    // Return the complete replacement edit
-    const lastLineId = document.lineCount - 1;
-    const wholeDocument = new vscode.Range(
-      0,
-      0,
-      lastLineId,
-      document.lineAt(lastLineId).text.length,
-    );
-    return [new vscode.TextEdit(wholeDocument, result)];
-  }
-
   // Start the client. This will also launch the server
   client.start();
 
@@ -153,8 +92,7 @@ export function activate(context: ExtensionContext) {
           vscode.ConfigurationTarget.Global,
         );
         vscode.window.showInformationMessage(
-          `ZX: embedded Zig expression formatting is now ${
-            newValue ? "enabled" : "disabled"
+          `ZX: embedded Zig expression formatting is now ${newValue ? "enabled" : "disabled"
           }`,
         );
       },
@@ -162,6 +100,79 @@ export function activate(context: ExtensionContext) {
   );
   // Register HTML autocomplete + tag-complete for `.zx` files
   registerHtmlAutoCompletion(context, "zx");
+}
+
+async function formatWithZxCli(
+  document: vscode.TextDocument,
+  token: vscode.CancellationToken,
+): Promise<vscode.TextEdit[] | null> {
+  const abortController = new AbortController();
+  token.onCancellationRequested(() => abortController.abort());
+
+  try {
+    const cwd = workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const originalText = document.getText();
+    const promise = execFile("zx", ["fmt", "--stdio"], {
+      cwd,
+      maxBuffer: 10 * 1024 * 1024,
+      signal: abortController.signal,
+      timeout: 60000,
+    });
+    promise.child.stdin?.end(originalText);
+
+    const { stdout } = await promise;
+    const lastLineId = document.lineCount - 1;
+    const wholeDocument = new vscode.Range(
+      0,
+      0,
+      lastLineId,
+      document.lineAt(lastLineId).text.length,
+    );
+
+    if (!stdout || stdout === originalText) {
+      return null;
+    }
+
+    return [new vscode.TextEdit(wholeDocument, stdout)];
+  } catch (error: any) {
+    if (token.isCancellationRequested) {
+      return null;
+    }
+
+    const message =
+      error?.stderr?.toString()?.trim() || error?.message || String(error);
+    const isNotFound =
+      message.includes("not found") ||
+      message.includes("ENOENT") ||
+      error.code === "ENOENT";
+
+    if (isNotFound) {
+      const os = process.platform;
+      const installCommand =
+        os === "win32"
+          ? 'powershell -c "irm ziex.dev/install.ps1 | iex"'
+          : "curl -fsSL https://ziex.dev/install | bash";
+
+      const selection = await window.showErrorMessage(
+        "ZX CLI not found. Please install it to use code formatting.",
+        "Install Now",
+        "Copy Installation Script",
+      );
+
+      if (selection === "Copy Installation Script") {
+        await vscode.env.clipboard.writeText(installCommand);
+        window.showInformationMessage("Installation command copied to clipboard!");
+      } else if (selection === "Install Now") {
+        const terminal = window.createTerminal("ZX CLI Installation");
+        terminal.sendText(installCommand);
+        terminal.show();
+      }
+    } else {
+      window.showErrorMessage(`ZX: failed to format using 'zx fmt': ${message}`);
+    }
+
+    return null;
+  }
 }
 
 export function deactivate(): Thenable<void> | undefined {
