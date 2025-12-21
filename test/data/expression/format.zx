@@ -2,12 +2,19 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
     const count = 42;
     const hex_value = 255;
     const percentage = 75;
+    const float_value = 3.14;
+    const bool_value = true;
 
     return (
         <section @allocator={allocator}>
             <p>Count: {[count:d]}</p>
             <p>Hex: 0x{[hex_value:x]}</p>
             <p>Percentage: {[percentage:d]}%</p>
+            <p>Count: {count}</p>
+            <p>Hex: 0x{hex_value}</p>
+            <p>Percentage: {percentage}%</p>
+            <p>Float: {float_value}</p>
+            <p>Bool: {bool_value}</p>
         </section>
     );
 }

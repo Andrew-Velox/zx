@@ -734,9 +734,9 @@ const ZxContext = struct {
         if (T == Component) return val;
 
         const Cmp = switch (@typeInfo(T)) {
-            .int => self.fmt("{d}", .{val}),
-            .float => self.fmt("{d}", .{val}),
-            .bool => self.fmt("{?}", .{val}),
+            .comptime_int, .int => self.fmt("{d}", .{val}),
+            .comptime_float, .float => self.fmt("{d.2f}", .{val}),
+            .bool => self.fmt("{s}", .{if (val) "true" else "false"}),
             .pointer => |ptr_info| switch (ptr_info.size) {
                 .one => switch (@typeInfo(ptr_info.child)) {
                     .array => {
@@ -764,7 +764,7 @@ const ZxContext = struct {
                 },
                 else => @compileError("Unable to stringify type '" ++ @typeName(T) ++ "'"),
             },
-            else => @compileError("Unsupported type"),
+            else => @compileError("Unsupported type '" ++ @typeName(T) ++ "'"),
         };
 
         return Cmp;

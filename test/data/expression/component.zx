@@ -4,6 +4,10 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
     return (
         <section @allocator={allocator}>
             {(greeting)}
+            <p>Greeting: {greeting}</p>
+            <div>
+                {greeting}
+            </div>
         </section>
     );
 }
