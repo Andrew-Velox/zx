@@ -1,0 +1,9 @@
+pub fn Page(allocator: zx.Allocator) zx.Component {
+    return (<Button @allocator={allocator}  />);
+}
+
+pub fn Button(allocator: zx.Allocator) zx.Component {
+    return (<button @allocator={allocator}>Button</button>);
+}
+
+const zx = @import("zx");

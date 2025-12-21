@@ -237,6 +237,12 @@ test "component_import" {
     try test_render(@import("./../data/component/import.zig").Page);
 }
 
+test "component_root_cmp" {
+    // if (true) return error.Todo;
+    try test_transpile("component/root_cmp");
+    try test_render(@import("./../data/component/root_cmp.zig").Page);
+}
+
 test "performance" {
     // if (true) return error.Todo;
     const MAX_TIME_MS = 50.0 * 8; // 50ms is on M1 Pro

@@ -53,6 +53,7 @@ pub const TestFileCache = struct {
         "component/csr_react_multiple",
         "component/csr_zig",
         "component/import",
+        "component/root_cmp",
 
         // Attribute
         "attribute/builtin",

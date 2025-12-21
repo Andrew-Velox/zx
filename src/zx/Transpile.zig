@@ -591,28 +591,38 @@ pub fn getAllocatorAttribute(self: *Ast, node: ts.Node) !?[]const u8 {
     var i: u32 = 0;
     while (i < child_count) : (i += 1) {
         const child = node.child(i) orelse continue;
-        if (NodeKind.fromNode(child) != .zx_start_tag) continue;
+        const child_kind = NodeKind.fromNode(child);
 
-        // Check attributes in start tag
-        const tag_children = child.childCount();
-        var j: u32 = 0;
-        while (j < tag_children) : (j += 1) {
-            const attr = child.child(j) orelse continue;
-            const attr_kind = NodeKind.fromNode(attr);
-
-            if (attr_kind != .zx_attribute and attr_kind != .zx_builtin_attribute) continue;
-
-            // Get the actual attribute node (zx_attribute wraps zx_builtin_attribute)
-            const actual_attr = if (attr_kind == .zx_attribute) attr.child(0) orelse continue else attr;
-
-            // Use field name to get name and value directly
-            const name_node = actual_attr.childByFieldName("name") orelse continue;
-            const name = try self.getNodeText(name_node);
-            if (std.mem.eql(u8, name, "@allocator")) {
-                const value_node = actual_attr.childByFieldName("value") orelse return "allocator";
-                return try getAttributeValue(self, value_node);
+        // Regular elements like <div>...</div>)
+        if (child_kind == .zx_start_tag) {
+            const tag_children = child.childCount();
+            var j: u32 = 0;
+            while (j < tag_children) : (j += 1) {
+                const attr = child.child(j) orelse continue;
+                if (try checkAllocatorAttr(self, attr)) |value| return value;
             }
         }
+
+        // Self-closing elements (like <Button @allocator={allocator} />)
+        if (child_kind == .zx_attribute or child_kind == .zx_builtin_attribute) {
+            if (try checkAllocatorAttr(self, child)) |value| return value;
+        }
+    }
+    return null;
+}
+
+fn checkAllocatorAttr(self: *Ast, attr: ts.Node) !?[]const u8 {
+    const attr_kind = NodeKind.fromNode(attr);
+    if (attr_kind != .zx_attribute and attr_kind != .zx_builtin_attribute) return null;
+
+    const actual_attr = if (attr_kind == .zx_attribute) attr.child(0) orelse return null else attr;
+
+    const name_node = actual_attr.childByFieldName("name") orelse return null;
+    const name = try self.getNodeText(name_node);
+
+    if (std.mem.eql(u8, name, "@allocator")) {
+        const value_node = actual_attr.childByFieldName("value") orelse return "allocator"; // TODO: need to catch and add to errors list in case of no value
+        return try getAttributeValue(self, value_node);
     }
     return null;
 }
