@@ -19,7 +19,7 @@ pub fn init(b: *std.Build, exe: *std.Build.Step.Compile, options: ZxInitOptions)
         .steps = .default,
         .plugins = &.{},
         .experimental_enabled_csr = false,
-        .experimental_ts_based_transpile = false,
+        .experimental_ts_based_transpile = true,
     };
 
     if (options.site) |site_opts| {
