@@ -31,12 +31,13 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
     );
 }
 
+// Note: Not providing allocator here will use the default allocator (std.heap.page_allocator) and will have performance penalty
+// Only use this when you need to create a component that doesn't need to allocate memory, like a complete static element.
 const hello_child_outside = _zx_ele_blk_1: {
-    var _zx = zx.allocInit(std.heap.page_allocator);
+    var _zx = zx.init();
     break :_zx_ele_blk_1 _zx.ele(
         .div,
         .{
-            .allocator = std.heap.page_allocator,
             .children = &.{
                 _zx.txt("Hello!"),
             },

@@ -858,7 +858,7 @@ const ClientComponentOptions = struct {
 /// Initialize a ZxContext without an allocator
 /// The allocator must be provided via @allocator attribute on the parent element
 pub fn init() ZxContext {
-    return .{ .allocator = null };
+    return .{ .allocator = std.heap.page_allocator };
 }
 
 /// Initialize a ZxContext with an allocator (for backward compatibility with direct API usage)
