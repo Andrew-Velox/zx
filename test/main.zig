@@ -2,8 +2,6 @@ const std = @import("std");
 
 test {
     _ = @import("zx/ast.zig");
-}
-test "cli" {
     _ = @import("cli/fmt.zig");
     _ = @import("cli/cli.zig");
 }

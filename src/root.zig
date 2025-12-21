@@ -728,6 +728,48 @@ const ZxContext = struct {
         return .{ .text = escaped };
     }
 
+    pub fn expr(self: *ZxContext, val: anytype) Component {
+        const T = @TypeOf(val);
+
+        if (T == Component) return val;
+
+        const Cmp = switch (@typeInfo(T)) {
+            .int => self.fmt("{d}", .{val}),
+            .float => self.fmt("{d}", .{val}),
+            .bool => self.fmt("{?}", .{val}),
+            .pointer => |ptr_info| switch (ptr_info.size) {
+                .one => switch (@typeInfo(ptr_info.child)) {
+                    .array => {
+                        // Coerce `*[N]T` to `[]const T`.
+                        const Slice = []const std.meta.Elem(ptr_info.child);
+                        return self.expr(@as(Slice, val));
+                    },
+                    else => {
+                        return self.expr(val.*);
+                    },
+                },
+                .many, .slice => {
+                    if (ptr_info.size == .many and ptr_info.sentinel() == null)
+                        @compileError("unable to stringify type '" ++ @typeName(T) ++ "' without sentinel");
+                    const slice = if (ptr_info.size == .many) std.mem.span(val) else val;
+
+                    if (ptr_info.child == u8) {
+                        // This is a []const u8, or some similar Zig string.
+                        if (std.unicode.utf8ValidateSlice(slice)) {
+                            return txt(self, slice);
+                        }
+                    }
+
+                    return self.txt(slice);
+                },
+                else => @compileError("Unable to stringify type '" ++ @typeName(T) ++ "'"),
+            },
+            else => @compileError("Unsupported type"),
+        };
+
+        return Cmp;
+    }
+
     pub fn fmt(self: *ZxContext, comptime format: []const u8, args: anytype) Component {
         const allocator = self.getAllocator();
         const text = std.fmt.allocPrint(allocator, format, args) catch @panic("OOM");

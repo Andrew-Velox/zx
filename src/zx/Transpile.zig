@@ -84,7 +84,7 @@ pub const TranspileContext = struct {
         try self.write(bytes);
     }
 
-    fn writeWithMappingFromByte(self: *TranspileContext, bytes: []const u8, source_byte: u32, ast: *const Ast) !void {
+    fn writeM(self: *TranspileContext, bytes: []const u8, source_byte: u32, ast: *const Ast) !void {
         const pos = ast.getLineColumn(source_byte);
         try self.writeWithMapping(bytes, pos.line, pos.column);
     }
@@ -163,7 +163,7 @@ pub fn transpileNode(self: *Ast, node: ts.Node, ctx: *TranspileContext) error{Ou
                 // Store the mapping for later use
                 try ctx.js_imports.put(js_import.name, js_import.path);
                 // Comment out the entire declaration
-                try ctx.writeWithMappingFromByte("// ", start_byte, self);
+                try ctx.writeM("// ", start_byte, self);
                 if (start_byte < end_byte and end_byte <= self.source.len) {
                     try ctx.write(self.source[start_byte..end_byte]);
                 }
@@ -203,7 +203,7 @@ pub fn transpileNode(self: *Ast, node: ts.Node, ctx: *TranspileContext) error{Ou
     if (child_count == 0) {
         if (start_byte < end_byte and end_byte <= self.source.len) {
             const text = self.source[start_byte..end_byte];
-            try ctx.writeWithMappingFromByte(text, start_byte, self);
+            try ctx.writeM(text, start_byte, self);
         }
         return;
     }
@@ -218,7 +218,7 @@ pub fn transpileNode(self: *Ast, node: ts.Node, ctx: *TranspileContext) error{Ou
 
         if (current_pos < child_start and child_start <= self.source.len) {
             const text = self.source[current_pos..child_start];
-            try ctx.writeWithMappingFromByte(text, current_pos, self);
+            try ctx.writeM(text, current_pos, self);
         }
 
         try transpileNode(self, child, ctx);
@@ -227,7 +227,7 @@ pub fn transpileNode(self: *Ast, node: ts.Node, ctx: *TranspileContext) error{Ou
 
     if (current_pos < end_byte and end_byte <= self.source.len) {
         const text = self.source[current_pos..end_byte];
-        try ctx.writeWithMappingFromByte(text, current_pos, self);
+        try ctx.writeM(text, current_pos, self);
     }
 }
 
@@ -383,7 +383,7 @@ pub fn transpileBuiltin(self: *Ast, node: ts.Node, ctx: *TranspileContext) !bool
                 // Check if it ends with .zx
                 if (std.mem.endsWith(u8, import_path, ".zx")) {
                     // Write @import with transformed path
-                    try ctx.writeWithMappingFromByte("@import", node.startByte(), self);
+                    try ctx.writeM("@import", node.startByte(), self);
                     try ctx.write("(\"");
 
                     // Write path with .zig instead of .zx
@@ -430,7 +430,7 @@ pub fn transpileReturn(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void 
                     // Check if we need to initialize _zx with allocator
                     const allocator_value = try getAllocatorAttribute(self, child);
 
-                    try ctx.writeWithMappingFromByte("var", node.startByte(), self);
+                    try ctx.writeM("var", node.startByte(), self);
                     try ctx.write(" _zx = zx.");
                     if (allocator_value) |alloc| {
                         try ctx.write("initWithAllocator(");
@@ -441,7 +441,7 @@ pub fn transpileReturn(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void 
                     }
                     try ctx.write(";\n");
                     try ctx.writeIndent();
-                    try ctx.writeWithMappingFromByte("return", node.startByte(), self);
+                    try ctx.writeM("return", node.startByte(), self);
                     try ctx.write(" ");
                     try transpileElement(self, child, ctx, true);
                     return;
@@ -766,7 +766,7 @@ fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: 
         const id = generateComponentId(tag, full_path);
 
         // Write _zx.client(.{ .name = "Name", .path = "path", .id = "id" }, .{ props })
-        try ctx.writeWithMappingFromByte("_zx.client", node.startByte(), self);
+        try ctx.writeM("_zx.client", node.startByte(), self);
         try ctx.write("(.{ .name = \"");
         try ctx.write(tag);
         try ctx.write("\", .path = \"");
@@ -785,13 +785,13 @@ fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: 
             try ctx.write(" .");
             try ctx.write(attr.name);
             try ctx.write(" = ");
-            try ctx.writeWithMappingFromByte(attr.value, attr.value_byte_offset, self);
+            try ctx.writeM(attr.value, attr.value_byte_offset, self);
         }
 
         try ctx.write(" })");
     } else {
         // Regular lazy component
-        try ctx.writeWithMappingFromByte("_zx.lazy", node.startByte(), self);
+        try ctx.writeM("_zx.lazy", node.startByte(), self);
         try ctx.write("(");
         try ctx.write(tag);
         try ctx.write(", .{");
@@ -805,7 +805,7 @@ fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: 
             try ctx.write(" .");
             try ctx.write(attr.name);
             try ctx.write(" = ");
-            try ctx.writeWithMappingFromByte(attr.value, attr.value_byte_offset, self);
+            try ctx.writeM(attr.value, attr.value_byte_offset, self);
         }
 
         try ctx.write(" })");
@@ -836,12 +836,12 @@ fn generateComponentId(name: []const u8, path: []const u8) [35]u8 {
 /// Write a regular HTML element: _zx.zx(.tag, .{ ... })
 /// When preserve_whitespace is true (e.g. for <pre>), text nodes won't be trimmed
 fn writeHtmlElement(self: *Ast, node: ts.Node, tag: []const u8, attributes: []const ZxAttribute, children: []const ts.Node, ctx: *TranspileContext, preserve_whitespace: bool) !void {
-    try ctx.writeWithMappingFromByte("_zx.zx", node.startByte(), self);
+    try ctx.writeM("_zx.zx", node.startByte(), self);
     try ctx.write("(\n");
 
     ctx.indent_level += 1;
     try ctx.writeIndent();
-    try ctx.writeWithMappingFromByte(".", node.startByte(), self);
+    try ctx.writeM(".", node.startByte(), self);
     try ctx.write(tag);
     try ctx.write(",\n");
 
@@ -887,12 +887,12 @@ fn writeHtmlElement(self: *Ast, node: ts.Node, tag: []const u8, attributes: []co
 
 /// Write a regular HTML element with raw (unprocessed) content: _zx.zx(.tag, .{ .children = &.{ _zx.txt("...") } })
 fn writeHtmlElementRaw(self: *Ast, node: ts.Node, tag: []const u8, attributes: []const ZxAttribute, raw_content: []const u8, ctx: *TranspileContext) !void {
-    try ctx.writeWithMappingFromByte("_zx.zx", node.startByte(), self);
+    try ctx.writeM("_zx.zx", node.startByte(), self);
     try ctx.write("(\n");
 
     ctx.indent_level += 1;
     try ctx.writeIndent();
-    try ctx.writeWithMappingFromByte(".", node.startByte(), self);
+    try ctx.writeM(".", node.startByte(), self);
     try ctx.write(tag);
     try ctx.write(",\n");
 
@@ -952,7 +952,7 @@ pub fn transpileChild(self: *Ast, node: ts.Node, ctx: *TranspileContext, preserv
                     // Add \n at end of each text node except the last child
                     if (text.len == 0) continue;
 
-                    try ctx.writeWithMappingFromByte("_zx.txt(\"", child.startByte(), self);
+                    try ctx.writeM("_zx.txt(\"", child.startByte(), self);
                     try escapeZigString(text, ctx);
                     // Add newline at end unless this is the last child
                     if (!is_last_child) try ctx.write("\\n");
@@ -968,7 +968,7 @@ pub fn transpileChild(self: *Ast, node: ts.Node, ctx: *TranspileContext, preserv
                     const has_leading_ws = text.len > 0 and std.ascii.isWhitespace(text[0]);
                     const has_trailing_ws = text.len > 0 and std.ascii.isWhitespace(text[text.len - 1]);
 
-                    try ctx.writeWithMappingFromByte("_zx.txt(\"", child.startByte(), self);
+                    try ctx.writeM("_zx.txt(\"", child.startByte(), self);
                     if (has_leading_ws) try ctx.write(" ");
                     try escapeZigString(trimmed, ctx);
                     if (has_trailing_ws) try ctx.write(" ");
@@ -1050,11 +1050,11 @@ pub fn transpileExprBlock(self: *Ast, node: ts.Node, ctx: *TranspileContext) err
 
         if (trimmed[0] == '(') {
             // Component expression like {(component)}
-            try ctx.writeWithMappingFromByte(trimmed, child.startByte(), self);
+            try ctx.writeM(trimmed, child.startByte(), self);
         } else {
             // Regular expression like {user.name}
-            try ctx.writeWithMappingFromByte("_zx.txt(", child.startByte(), self);
-            try ctx.write(trimmed);
+            try ctx.writeM("_zx.expr(", child.startByte(), self);
+            try ctx.writeM(trimmed, child.startByte(), self);
             try ctx.write(")");
         }
     }
@@ -1073,7 +1073,7 @@ pub fn transpileFormat(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void 
         const expr = if (colon_idx) |idx| inner[0..idx] else inner;
         const format = if (colon_idx) |idx| inner[idx + 1 ..] else "d";
 
-        try ctx.writeWithMappingFromByte("_zx.fmt(\"", node.startByte(), self);
+        try ctx.writeM("_zx.fmt(\"", node.startByte(), self);
         try ctx.write("{");
         try ctx.write(format);
         try ctx.write("}\", .{");
@@ -1118,7 +1118,7 @@ pub fn transpileIf(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
     const cond = condition_text orelse return;
     const then_n = then_node orelse return;
 
-    try ctx.writeWithMappingFromByte("if", node.startByte(), self);
+    try ctx.writeM("if", node.startByte(), self);
     try ctx.write(" ");
 
     // Write condition - ensure wrapped in parens
@@ -1155,7 +1155,7 @@ fn transpileBranch(self: *Ast, node: ts.Node, ctx: *TranspileContext) error{OutO
         },
         else => {
             try ctx.write("_zx.txt(");
-            try ctx.writeWithMappingFromByte(try self.getNodeText(node), node.startByte(), self);
+            try ctx.writeM(try self.getNodeText(node), node.startByte(), self);
             try ctx.write(")");
         },
     }
@@ -1210,7 +1210,7 @@ pub fn transpileFor(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
         const idx_str = std.fmt.bufPrint(&idx_buf, "{d}", .{block_idx}) catch unreachable;
 
         // Generate: blk_N: { const __zx_children_N = _zx.getAllocator().alloc(...); for (...) |item, i| { ... }; break :blk_N ...; }
-        try ctx.writeWithMappingFromByte("blk_", node.startByte(), self);
+        try ctx.writeM("blk_", node.startByte(), self);
         try ctx.write(idx_str);
         try ctx.write(": {\n");
 
@@ -1223,7 +1223,7 @@ pub fn transpileFor(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
         try ctx.write(".len) catch unreachable;\n");
 
         try ctx.writeIndent();
-        try ctx.writeWithMappingFromByte("for", node.startByte(), self);
+        try ctx.writeM("for", node.startByte(), self);
         try ctx.write(" (");
         try ctx.write(iterable_text.?);
         try ctx.write(", 0..) |");
@@ -1308,7 +1308,7 @@ pub fn transpileWhile(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
         const idx_str = std.fmt.bufPrint(&idx_buf, "{d}", .{block_idx}) catch unreachable;
 
         // Generate: blk_N: { var __zx_list_N = std.ArrayList(zx.Component).init(_zx.getAllocator()); while (cond) : (cont) { __zx_list_N.append(...); }; break :blk_N ...; }
-        try ctx.writeWithMappingFromByte("blk_", node.startByte(), self);
+        try ctx.writeM("blk_", node.startByte(), self);
         try ctx.write(idx_str);
         try ctx.write(": {\n");
 
@@ -1319,7 +1319,7 @@ pub fn transpileWhile(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
         try ctx.write(" = @import(\"std\").ArrayList(zx.Component).empty;\n");
 
         try ctx.writeIndent();
-        try ctx.writeWithMappingFromByte("while", node.startByte(), self);
+        try ctx.writeM("while", node.startByte(), self);
         try ctx.write(" (");
         try ctx.write(condition_text.?);
         try ctx.write(")");
@@ -1386,7 +1386,7 @@ pub fn transpileSwitch(self: *Ast, node: ts.Node, ctx: *TranspileContext) error{
 
     const expr = switch_expr orelse return;
 
-    try ctx.writeWithMappingFromByte("switch", node.startByte(), self);
+    try ctx.writeM("switch", node.startByte(), self);
     try ctx.write(" (");
     try ctx.write(expr);
     try ctx.write(") {\n");
@@ -1430,7 +1430,7 @@ pub fn transpileCase(self: *Ast, node: ts.Node, ctx: *TranspileContext) error{Ou
     }
 
     if (pattern_node) |p| {
-        try ctx.writeWithMappingFromByte(try self.getNodeText(p), p.startByte(), self);
+        try ctx.writeM(try self.getNodeText(p), p.startByte(), self);
         try ctx.write(" => ");
     }
 
@@ -1444,10 +1444,10 @@ pub fn transpileCase(self: *Ast, node: ts.Node, ctx: *TranspileContext) error{Ou
             .switch_expression => try transpileSwitch(self, v, ctx),
             .parenthesized_expression => {
                 // Value like `("Admin")` renders as _zx.txt("Admin")
-                try ctx.writeWithMappingFromByte("_zx.txt", v.startByte(), self);
-                try ctx.writeWithMappingFromByte(try self.getNodeText(v), v.startByte(), self);
+                try ctx.writeM("_zx.txt", v.startByte(), self);
+                try ctx.writeM(try self.getNodeText(v), v.startByte(), self);
             },
-            else => try ctx.writeWithMappingFromByte(try self.getNodeText(v), v.startByte(), self),
+            else => try ctx.writeM(try self.getNodeText(v), v.startByte(), self),
         }
     }
 
@@ -1481,7 +1481,7 @@ fn writeAttributes(self: *Ast, attributes: []const ZxAttribute, ctx: *TranspileC
         try ctx.write(".");
         try ctx.write(attr.name[1..]); // Skip @ prefix
         try ctx.write(" = ");
-        try ctx.writeWithMappingFromByte(attr.value, attr.value_byte_offset, self);
+        try ctx.writeM(attr.value, attr.value_byte_offset, self);
         try ctx.write(",\n");
     }
 
@@ -1498,7 +1498,7 @@ fn writeAttributes(self: *Ast, attributes: []const ZxAttribute, ctx: *TranspileC
         try ctx.write(".{ .name = \"");
         try ctx.write(attr.name);
         try ctx.write("\", .value = ");
-        try ctx.writeWithMappingFromByte(attr.value, attr.value_byte_offset, self);
+        try ctx.writeM(attr.value, attr.value_byte_offset, self);
         try ctx.write(" },\n");
     }
 

@@ -22,7 +22,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                                                 .p,
                                                 .{
                                                     .children = &.{
-                                                        _zx.txt(item),
+                                                        _zx.expr(item),
                                                     },
                                                 },
                                             );

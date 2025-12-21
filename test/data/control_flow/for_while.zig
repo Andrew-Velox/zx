@@ -24,7 +24,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                                                     .children = &.{
                                                         _zx.fmt("{d}", .{j}),
                                                         _zx.txt(" : "),
-                                                        _zx.txt(group),
+                                                        _zx.expr(group),
                                                     },
                                                 },
                                             )) catch unreachable;

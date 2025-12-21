@@ -21,7 +21,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                                         .p,
                                         .{
                                             .children = &.{
-                                                _zx.txt(user.name),
+                                                _zx.expr(user.name),
                                                 _zx.txt(" (Active)"),
                                             },
                                         },
@@ -29,7 +29,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                                         .p,
                                         .{
                                             .children = &.{
-                                                _zx.txt(user.name),
+                                                _zx.expr(user.name),
                                                 _zx.txt(" (Inactive)"),
                                             },
                                         },
