@@ -1,9 +1,10 @@
 #!/bin/bash
 
 # Pre-commit hook to set or increment version number
-# Usage: ./precommit [version]
+# Usage: ./version [version | --commit]
 #   If version is provided, sets that version everywhere
-#   If no version is provided, increments the dev number (e.g., dev.10 -> dev.11)
+#   If --commit is provided, uses git commit count + 1 as the dev number
+#   If no argument is provided, increments the dev number (e.g., dev.10 -> dev.11)
 
 BUILD_ZON_FILE="build.zig.zon"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,8 +25,18 @@ if [ -z "$CURRENT_VERSION" ]; then
     exit 1
 fi
 
+# Check if --commit flag was provided
+if [ "$1" = "--commit" ]; then
+    # Get total git commit count + 1
+    COMMIT_COUNT=$(git -C "$PROJECT_ROOT" rev-list --count HEAD 2>/dev/null)
+    if [ -z "$COMMIT_COUNT" ]; then
+        echo "Error: Could not get git commit count"
+        exit 1
+    fi
+    NEW_DEV_NUMBER=$((COMMIT_COUNT + 1))
+    NEW_VERSION=$(echo "$CURRENT_VERSION" | sed -E "s/dev\.[0-9]+/dev.$NEW_DEV_NUMBER/")
 # Check if version was provided as argument
-if [ -n "$1" ]; then
+elif [ -n "$1" ]; then
     NEW_VERSION="$1"
     echo "Setting version to: $NEW_VERSION"
 else
