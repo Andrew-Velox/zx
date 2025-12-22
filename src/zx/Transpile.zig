@@ -240,18 +240,7 @@ pub fn transpileNode(self: *Ast, node: ts.Node, ctx: *TranspileContext) error{Ou
             }
         },
         .return_expression => {
-            const child_count = node.childCount();
-            var has_zx_block = false;
-            var i: u32 = 0;
-
-            while (i < child_count) : (i += 1) {
-                const child = node.child(i) orelse continue;
-                const child_kind = NodeKind.fromNode(child);
-                if (child_kind == .zx_block) {
-                    has_zx_block = true;
-                    break;
-                }
-            }
+            const has_zx_block = findZxBlockInReturn(node) != null;
 
             if (has_zx_block) {
                 // Special handling for return (ZX)
@@ -470,21 +459,9 @@ pub fn transpileBuiltin(self: *Ast, node: ts.Node, ctx: *TranspileContext) !bool
 }
 
 pub fn transpileReturn(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
-    // Handle: return (<zx>...</zx>)
+    // Handle: return (<zx>...</zx>) or return ((<zx>...</zx>))
     // This should NOT initialize _zx here - that's done in the parent block
-    const child_count = node.childCount();
-    var zx_block_node: ?ts.Node = null;
-
-    var i: u32 = 0;
-    while (i < child_count) : (i += 1) {
-        const child = node.child(i) orelse continue;
-        const child_kind = NodeKind.fromNode(child);
-
-        if (child_kind == .zx_block) {
-            zx_block_node = child;
-            break;
-        }
-    }
+    const zx_block_node = findZxBlockInReturn(node);
 
     if (zx_block_node) |zx_node| {
         // Find the element inside the zx_block
@@ -523,6 +500,22 @@ pub fn transpileReturn(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void 
             }
         }
     }
+}
+
+/// Find zx_block inside return expression (may be wrapped in parenthesized_expression)
+fn findZxBlockInReturn(node: ts.Node) ?ts.Node {
+    const child_count = node.childCount();
+    var i: u32 = 0;
+    while (i < child_count) : (i += 1) {
+        const child = node.child(i) orelse continue;
+        const child_kind = NodeKind.fromNode(child);
+
+        if (child_kind == .zx_block) return child;
+        if (child_kind == .parenthesized_expression) {
+            if (findZxBlockInReturn(child)) |found| return found;
+        }
+    }
+    return null;
 }
 
 pub fn transpileBlock(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
@@ -1552,7 +1545,7 @@ pub fn transpileCase(self: *Ast, node: ts.Node, ctx: *TranspileContext) error{Ou
     try ctx.write(",\n");
 }
 
-/// Transpile switch case value, handling parenthesized expressions with nested control flow
+/// Transpile switch case value, handling parenthesized expressions with nested control flow/zx
 fn transpileCaseValue(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
     const kind = NodeKind.fromNode(node);
 
@@ -1563,9 +1556,9 @@ fn transpileCaseValue(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
         .while_expression => try transpileWhile(self, node, ctx),
         .switch_expression => try transpileSwitch(self, node, ctx),
         .parenthesized_expression => {
-            // Check if contains control flow - transpile it directly
-            if (findControlFlowChild(node)) |cf_child| {
-                try transpileCaseValue(self, cf_child, ctx);
+            // Check if contains control flow or zx_block
+            if (findSpecialChild(node)) |child| {
+                try transpileCaseValue(self, child, ctx);
             } else {
                 // Simple parenthesized expression like ("Admin")
                 try ctx.writeM("_zx.txt", node.startByte(), self);
@@ -1576,16 +1569,16 @@ fn transpileCaseValue(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
     }
 }
 
-/// Find control flow expression inside a node (e.g., for inside parenthesized_expression)
-fn findControlFlowChild(node: ts.Node) ?ts.Node {
+/// Find control flow or zx_block inside a node
+fn findSpecialChild(node: ts.Node) ?ts.Node {
     const child_count = node.childCount();
     var i: u32 = 0;
     while (i < child_count) : (i += 1) {
         const child = node.child(i) orelse continue;
         switch (NodeKind.fromNode(child)) {
-            .if_expression, .for_expression, .while_expression, .switch_expression => return child,
+            .if_expression, .for_expression, .while_expression, .switch_expression, .zx_block => return child,
             else => {
-                if (findControlFlowChild(child)) |found| return found;
+                if (findSpecialChild(child)) |found| return found;
             },
         }
     }
