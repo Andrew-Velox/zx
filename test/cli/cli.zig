@@ -1,205 +1,143 @@
 test "init" {
-    // Create test/tmp directory
-    const test_dir = "test/tmp";
-    try std.fs.cwd().makePath(test_dir);
-
-    // Get absolute path for test directory
-    const test_dir_abs = try std.fs.cwd().realpathAlloc(allocator, test_dir);
-    defer allocator.free(test_dir_abs);
-
-    // Get absolute path for zx binary
-    const zx_bin_rel = if (builtin.os.tag == .windows) "zig-out/bin/zx.exe" else "zig-out/bin/zx";
-    const zx_bin_abs = try std.fs.cwd().realpathAlloc(allocator, zx_bin_rel);
-    defer allocator.free(zx_bin_abs);
-
-    // Initialize child process with cwd set to test/tmp
-    var child = std.process.Child.init(&.{ zx_bin_abs, "init" }, allocator);
-    child.cwd = test_dir_abs;
-    child.stdout_behavior = .Pipe;
-    child.stderr_behavior = .Pipe;
-    try child.spawn();
-
-    var stdout = std.ArrayList(u8).empty;
-    var stderr = std.ArrayList(u8).empty;
-    defer stdout.deinit(allocator);
-    defer stderr.deinit(allocator);
-    try child.collectOutput(allocator, &stdout, &stderr, 8192);
-    // std.debug.print("stdout: {s}\n", .{stdout.items});
-    // std.debug.print("stderr: {s}\n", .{stderr.items});
-
-    // Verify that build.zig.zon was created
-    const build_zig_zon_path = try std.fs.path.join(allocator, &.{ test_dir_abs, "build.zig.zon" });
-    defer allocator.free(build_zig_zon_path);
-
-    const file = try std.fs.openFileAbsolute(build_zig_zon_path, .{});
-    defer file.close();
-
-    const stat = try file.stat();
-    try std.testing.expect(stat.kind == .file);
-
-    const expected_strings = [_][]const u8{
-        "Initializing ZX project!",
-        "build.zig.zon",
-        "build.zig",
-        "site/main.zig",
-        ".gitignore",
-        "README.md",
-    };
-
-    for (expected_strings) |expected_string| {
-        try std.testing.expect(std.mem.indexOf(u8, stderr.items, expected_string) != null);
-    }
+    try test_cmd(.{
+        .args = &.{"init"},
+        .expected_exit_code = 0,
+        .expected_stderr_strings = &.{
+            "Initializing ZX project!",
+            "main.zig",
+            "page.zx",
+        },
+        .expected_files = &.{
+            "build.zig.zon",
+            "build.zig",
+            "site/main.zig",
+            "site/pages/page.zx",
+            "site/assets/style.css",
+            "site/public/favicon.ico",
+            "src/root.zig",
+            ".gitignore",
+            "README.md",
+        },
+    });
 }
 
 test "init → init" {
-    const zx_bin_abs = try getZxPath();
-    const test_dir_abs = try getTestDirPath();
-    defer allocator.free(zx_bin_abs);
-    defer allocator.free(test_dir_abs);
-
-    var child = std.process.Child.init(&.{ zx_bin_abs, "init" }, allocator);
-    child.cwd = test_dir_abs;
-    child.stdout_behavior = .Pipe;
-    child.stderr_behavior = .Pipe;
-    try child.spawn();
-
-    var stdout = std.ArrayList(u8).empty;
-    var stderr = std.ArrayList(u8).empty;
-    defer stdout.deinit(allocator);
-    defer stderr.deinit(allocator);
-    try child.collectOutput(allocator, &stdout, &stderr, 8192);
-
-    // std.debug.print("stdout: {s}\n", .{stdout.items});
-    // std.debug.print("stderr: {s}\n", .{stderr.items});
-
-    try std.testing.expect(std.mem.indexOf(u8, stderr.items, "Directory is not empty") != null);
+    try test_cmd(.{
+        .args = &.{"init"},
+        .expected_exit_code = 0,
+        .expected_stderr_strings = &.{
+            "Directory is not empty",
+        },
+    });
 }
 
 test "init --force" {
-    const zx_bin_abs = try getZxPath();
-    const test_dir_abs = try getTestDirPath();
-    defer allocator.free(zx_bin_abs);
-    defer allocator.free(test_dir_abs);
-
-    var child = std.process.Child.init(&.{ zx_bin_abs, "init", "--force" }, allocator);
-    child.cwd = test_dir_abs;
-    child.stdout_behavior = .Pipe;
-    child.stderr_behavior = .Pipe;
-    try child.spawn();
-
-    var stdout = std.ArrayList(u8).empty;
-    var stderr = std.ArrayList(u8).empty;
-    defer stdout.deinit(allocator);
-    defer stderr.deinit(allocator);
-    try child.collectOutput(allocator, &stdout, &stderr, 8192);
-
-    try std.testing.expect(std.mem.indexOf(u8, stderr.items, "Initializing ZX project!") != null);
+    try test_cmd(.{
+        .args = &.{ "init", "--force" },
+        .expected_exit_code = 0,
+        .expected_stderr_strings = &.{
+            "Initializing ZX project!",
+            "main.zig",
+            "page.zx",
+        },
+        .expected_files = &.{
+            "build.zig.zon",
+            "build.zig",
+            "site/main.zig",
+            "site/pages/page.zx",
+            ".gitignore",
+            "README.md",
+        },
+    });
 }
 
 test "init -t react" {
-    const zx_bin_abs = try getZxPath();
-    const test_dir_abs = try getTestDirPath();
-    defer allocator.free(zx_bin_abs);
-    defer allocator.free(test_dir_abs);
-
-    var child = std.process.Child.init(&.{ zx_bin_abs, "init", "react", "--template", "react" }, allocator);
-    child.cwd = test_dir_abs;
-    child.stdout_behavior = .Pipe;
-    child.stderr_behavior = .Pipe;
-    try child.spawn();
-
-    var stdout = std.ArrayList(u8).empty;
-    var stderr = std.ArrayList(u8).empty;
-    defer stdout.deinit(allocator);
-    defer stderr.deinit(allocator);
-    try child.collectOutput(allocator, &stdout, &stderr, 8192);
-
-    // std.debug.print("stderr: {s}\n", .{stderr.items});
-
-    const expected_strings = [_][]const u8{
-        "Initializing ZX project!",
-        "react",
-        "build.zig",
-        "site/main.zig",
-        "site/main.ts",
-        "site/pages/page.zx",
-        "site/pages/client.tsx",
-        "package.json",
-        "tsconfig.json",
-    };
-
-    for (expected_strings) |expected_string| {
-        try std.testing.expect(std.mem.indexOf(u8, stderr.items, expected_string) != null);
-    }
-
-    // Overwrite build.zig.zon with local zon so that the latest local zx is used
-    const build_zig_zon_path = try std.fs.path.join(allocator, &.{ test_dir_abs, "build.zig.zon" });
-    defer allocator.free(build_zig_zon_path);
-    var file = try std.fs.createFileAbsolute(build_zig_zon_path, .{ .truncate = true });
-    defer file.close();
-
-    _ = try file.writeAll(local_zon_str);
-}
-
-test "serve" {
-    if (!sholdRunSlowTest()) return error.SkipZigTest; // Slow test, will enable later, and execute as another steps as e2e before release
-    if (true) return error.Todo;
-
-    const zx_bin_abs = try getZxPath();
-    const test_dir_abs = try getTestDirPath();
-    defer allocator.free(zx_bin_abs);
-    defer allocator.free(test_dir_abs);
-
-    const port = "3456";
-    const port_colon = try std.fmt.allocPrint(allocator, ":{s}", .{port});
-    defer allocator.free(port_colon);
-
-    // Kill anything on that port (cross-platform)
-    killPort(port) catch {};
-
-    var build_child = std.process.Child.init(&.{ "zig", "build" }, allocator);
-    build_child.cwd = test_dir_abs;
-    build_child.stdout_behavior = .Ignore;
-    build_child.stderr_behavior = .Ignore;
-    try build_child.spawn();
-    _ = build_child.wait() catch {};
-
-    var child = std.process.Child.init(&.{ zx_bin_abs, "serve", "--port", port }, allocator);
-    child.cwd = test_dir_abs;
-    // child.stdout_behavior = .Ignore;
-    // child.stderr_behavior = .Ignore;
-    try child.spawn();
-    defer _ = child.kill() catch {};
-    errdefer _ = child.kill() catch {};
-
-    var client = std.http.Client{ .allocator = allocator };
-    defer client.deinit();
-
-    var aw = std.Io.Writer.Allocating.init(allocator);
-    defer aw.deinit();
-
-    const url = try std.fmt.allocPrint(allocator, "http://{s}:{s}", .{ "localhost", port });
-    defer allocator.free(url);
-
-    // wait for 2 seconds
-    std.Thread.sleep(std.time.ns_per_s * 1);
-    const result = try client.fetch(.{
-        .method = .GET,
-        .location = .{ .url = url },
-        .headers = std.http.Client.Request.Headers{},
-        .response_writer = &aw.writer,
+    try test_cmd(.{
+        .args = &.{ "init", "react", "--template", "react" },
+        .expected_exit_code = 0,
+        .expected_stderr_strings = &.{
+            "Initializing ZX project!",
+            "react",
+            "build.zig",
+            "main.zig",
+            "main.ts",
+            "page.zx",
+            "client.tsx",
+            "package.json",
+            "tsconfig.json",
+        },
+        .expected_files = &.{
+            "react/build.zig.zon",
+            "react/build.zig",
+            "react/site/main.zig",
+            "react/site/main.ts",
+            "react/site/pages/page.zx",
+            "react/site/pages/client.tsx",
+            "react/package.json",
+            "react/tsconfig.json",
+        },
     });
-
-    // Wait 500ms
-    std.Thread.sleep(std.time.ns_per_ms * 500);
-    _ = child.kill() catch {};
-    errdefer _ = child.kill() catch {};
-
-    try std.testing.expectEqual(result.status, std.http.Status.ok);
 }
+
+// test "serve" {
+//     if (!sholdRunSlowTest()) return error.SkipZigTest; // Slow test, will enable later, and execute as another steps as e2e before release
+//     if (true) return error.Todo;
+
+//     const zx_bin_abs = try getZxPath();
+//     const test_dir_abs = try getTestDirPath();
+//     defer allocator.free(zx_bin_abs);
+//     defer allocator.free(test_dir_abs);
+
+//     const port = "3456";
+//     const port_colon = try std.fmt.allocPrint(allocator, ":{s}", .{port});
+//     defer allocator.free(port_colon);
+
+//     // Kill anything on that port (cross-platform)
+//     killPort(port) catch {};
+
+//     var build_child = std.process.Child.init(&.{ "zig", "build" }, allocator);
+//     build_child.cwd = test_dir_abs;
+//     build_child.stdout_behavior = .Ignore;
+//     build_child.stderr_behavior = .Ignore;
+//     try build_child.spawn();
+//     _ = build_child.wait() catch {};
+
+//     var child = std.process.Child.init(&.{ zx_bin_abs, "serve", "--port", port }, allocator);
+//     child.cwd = test_dir_abs;
+//     // child.stdout_behavior = .Ignore;
+//     // child.stderr_behavior = .Ignore;
+//     try child.spawn();
+//     defer _ = child.kill() catch {};
+//     errdefer _ = child.kill() catch {};
+
+//     var client = std.http.Client{ .allocator = allocator };
+//     defer client.deinit();
+
+//     var aw = std.Io.Writer.Allocating.init(allocator);
+//     defer aw.deinit();
+
+//     const url = try std.fmt.allocPrint(allocator, "http://{s}:{s}", .{ "localhost", port });
+//     defer allocator.free(url);
+
+//     // wait for 2 seconds
+//     std.Thread.sleep(std.time.ns_per_s * 1);
+//     const result = try client.fetch(.{
+//         .method = .GET,
+//         .location = .{ .url = url },
+//         .headers = std.http.Client.Request.Headers{},
+//         .response_writer = &aw.writer,
+//     });
+
+//     // Wait 500ms
+//     std.Thread.sleep(std.time.ns_per_ms * 500);
+//     _ = child.kill() catch {};
+//     errdefer _ = child.kill() catch {};
+
+//     try std.testing.expectEqual(result.status, std.http.Status.ok);
+// }
 
 test "init → build" {
-    if (!sholdRunSlowTest()) return error.SkipZigTest; // Slow test, will enable later, and execute as another steps as e2e before release
+    if (!sholdRunSlowTest()) return error.SkipZigTest;
 
     const test_dir_abs = try getTestDirPath();
     defer allocator.free(test_dir_abs);
@@ -218,178 +156,124 @@ test "init → build" {
 
 test "export" {
     if (builtin.os.tag == .windows or !sholdRunSlowTest()) return error.SkipZigTest; // Export doesn't work on Windows yet
-    const test_dir_abs = try getTestDirPath();
-    const zx_bin_abs = try getZxPath();
-    defer allocator.free(test_dir_abs);
-    defer allocator.free(zx_bin_abs);
-
-    var export_child = std.process.Child.init(&.{ zx_bin_abs, "export" }, allocator);
-    export_child.cwd = test_dir_abs;
-    export_child.stdout_behavior = .Ignore;
-    export_child.stderr_behavior = .Ignore;
-    try export_child.spawn();
-    const exit_code = try export_child.wait();
-    switch (exit_code) {
-        .Exited => |code| try std.testing.expectEqual(code, 0),
-        else => try std.testing.expect(false),
-    }
-
-    const dist_dir_abs = try std.fs.path.join(allocator, &.{ test_dir_abs, "dist" });
-    defer allocator.free(dist_dir_abs);
-
-    var dist_dir = try std.fs.openDirAbsolute(dist_dir_abs, .{});
-    defer dist_dir.close();
-
-    const expected_files = [_][]const u8{
-        "index.html",
-        "about.html",
-        "assets" ++ std.fs.path.sep_str ++ "style.css",
-        "favicon.ico",
-    };
-
-    for (expected_files) |expected_file| {
-        const file_stat = try dist_dir.statFile(expected_file);
-        try std.testing.expectEqual(file_stat.kind, .file);
-    }
+    try test_cmd(.{
+        .args = &.{"export"},
+        .expected_exit_code = 0,
+        .expected_stderr_strings = &.{
+            "Building static ZX site!",
+            "dist",
+            "index.html",
+            "about.html",
+            "assets/style.css",
+            "favicon.ico",
+        },
+        .expected_files = &.{
+            "dist/index.html",
+            "dist/about.html",
+            "dist/assets/style.css",
+            "dist/favicon.ico",
+        },
+    });
 }
 
 test "bundle" {
-    if (!sholdRunSlowTest()) return error.SkipZigTest; // Export doesn't work on Windows yet
-    const test_dir_abs = try getTestDirPath();
-    const zx_bin_abs = try getZxPath();
-    defer allocator.free(test_dir_abs);
-    defer allocator.free(zx_bin_abs);
-
-    // Delete the bundle directory if it exists
-    const bundle_dir_abs = try std.fs.path.join(allocator, &.{ test_dir_abs, "bundle" });
-    defer allocator.free(bundle_dir_abs);
-    std.fs.cwd().deleteTree(bundle_dir_abs) catch |err| switch (err) {
-        else => {},
-    };
-
-    var export_child = std.process.Child.init(&.{ zx_bin_abs, "bundle" }, allocator);
-    export_child.cwd = test_dir_abs;
-    export_child.stdout_behavior = .Ignore;
-    export_child.stderr_behavior = .Ignore;
-    try export_child.spawn();
-    const exit_code = try export_child.wait();
-    switch (exit_code) {
-        .Exited => |code| try std.testing.expectEqual(code, 0),
-        else => try std.testing.expect(false),
-    }
-
-    const dist_dir_abs = try std.fs.path.join(allocator, &.{ test_dir_abs, "bundle" });
-    defer allocator.free(dist_dir_abs);
-
-    var dist_dir = try std.fs.openDirAbsolute(dist_dir_abs, .{});
-    defer dist_dir.close();
-
-    const expected_files = [_][]const u8{
-        "zx_site",
-        "assets" ++ std.fs.path.sep_str ++ "style.css",
-        "public" ++ std.fs.path.sep_str ++ "favicon.ico",
-    };
-
-    for (expected_files) |expected_file| {
-        const file_stat = try dist_dir.statFile(expected_file);
-        try std.testing.expectEqual(file_stat.kind, .file);
-    }
+    if (!sholdRunSlowTest()) return error.SkipZigTest;
+    try test_cmd(.{
+        .args = &.{"bundle"},
+        .expected_exit_code = 0,
+        .expected_stderr_strings = &.{
+            "Bundling ZX site!",
+            "bundle",
+            "zx_site",
+            "style.css",
+            "favicon.ico",
+        },
+        .expected_files = &.{
+            "bundle/zx_site",
+            "bundle/assets/style.css",
+            "bundle/public/favicon.ico",
+        },
+    });
 }
 
 test "bundle --docker" {
-    if (!sholdRunSlowTest()) return error.SkipZigTest; // Export doesn't work on Windows yet
-    const test_dir_abs = try getTestDirPath();
-    const zx_bin_abs = try getZxPath();
-    defer allocator.free(test_dir_abs);
-    defer allocator.free(zx_bin_abs);
-
-    // Delete the bundle directory if it exists
-    const bundle_dir_abs = try std.fs.path.join(allocator, &.{ test_dir_abs, "bundle" });
-    defer allocator.free(bundle_dir_abs);
-    std.fs.cwd().deleteTree(bundle_dir_abs) catch |err| switch (err) {
-        else => {},
-    };
-
-    var export_child = std.process.Child.init(&.{ zx_bin_abs, "bundle", "--docker" }, allocator);
-    export_child.cwd = test_dir_abs;
-    export_child.stdout_behavior = .Ignore;
-    export_child.stderr_behavior = .Ignore;
-    try export_child.spawn();
-    const exit_code = try export_child.wait();
-    switch (exit_code) {
-        .Exited => |code| try std.testing.expectEqual(code, 0),
-        else => try std.testing.expect(false),
-    }
-
-    const dist_dir_abs = try std.fs.path.join(allocator, &.{ test_dir_abs, "bundle" });
-    defer allocator.free(dist_dir_abs);
-
-    var dist_dir = try std.fs.openDirAbsolute(dist_dir_abs, .{});
-    defer dist_dir.close();
-
-    const expected_files = [_][]const u8{
-        "Dockerfile",
-        "assets" ++ std.fs.path.sep_str ++ "style.css",
-        "public" ++ std.fs.path.sep_str ++ "favicon.ico",
-    };
-
-    for (expected_files) |expected_file| {
-        const file_stat = try dist_dir.statFile(expected_file);
-        try std.testing.expectEqual(file_stat.kind, .file);
-    }
+    if (!sholdRunSlowTest()) return error.SkipZigTest;
+    try test_cmd(.{
+        .args = &.{ "bundle", "--docker" },
+        .expected_exit_code = 0,
+        .expected_stderr_strings = &.{
+            "Bundling ZX site!",
+            "bundle",
+            "Dockerfile",
+            "style.css",
+            "favicon.ico",
+        },
+        .expected_files = &.{
+            "bundle/Dockerfile",
+            "bundle/assets/style.css",
+            "bundle/public/favicon.ico",
+        },
+    });
 }
 
 test "bundle --docker-compose" {
-    if (!sholdRunSlowTest()) return error.SkipZigTest; // Export doesn't work on Windows yet
-    const test_dir_abs = try getTestDirPath();
-    const zx_bin_abs = try getZxPath();
-    defer allocator.free(test_dir_abs);
-    defer allocator.free(zx_bin_abs);
-
-    // Delete the bundle directory if it exists
-    const bundle_dir_abs = try std.fs.path.join(allocator, &.{ test_dir_abs, "bundle" });
-    defer allocator.free(bundle_dir_abs);
-    std.fs.cwd().deleteTree(bundle_dir_abs) catch |err| switch (err) {
-        else => {},
-    };
-
-    var export_child = std.process.Child.init(&.{ zx_bin_abs, "bundle", "--docker-compose" }, allocator);
-    export_child.cwd = test_dir_abs;
-    export_child.stdout_behavior = .Ignore;
-    export_child.stderr_behavior = .Ignore;
-    try export_child.spawn();
-    const exit_code = try export_child.wait();
-    switch (exit_code) {
-        .Exited => |code| try std.testing.expectEqual(code, 0),
-        else => try std.testing.expect(false),
-    }
-
-    const dist_dir_abs = try std.fs.path.join(allocator, &.{ test_dir_abs, "bundle" });
-    defer allocator.free(dist_dir_abs);
-
-    var dist_dir = try std.fs.openDirAbsolute(dist_dir_abs, .{});
-    defer dist_dir.close();
-
-    const expected_files = [_][]const u8{
-        "Dockerfile",
-        "compose.yml",
-        "assets" ++ std.fs.path.sep_str ++ "style.css",
-        "public" ++ std.fs.path.sep_str ++ "favicon.ico",
-    };
-
-    for (expected_files) |expected_file| {
-        const file_stat = try dist_dir.statFile(expected_file);
-        try std.testing.expectEqual(file_stat.kind, .file);
-    }
+    if (!sholdRunSlowTest()) return error.SkipZigTest;
+    try test_cmd(.{
+        .args = &.{ "bundle", "--docker-compose" },
+        .expected_exit_code = 0,
+        .expected_stderr_strings = &.{
+            "Bundling ZX site!",
+            "bundle",
+            "Dockerfile",
+            "compose.yml",
+            "style.css",
+            "favicon.ico",
+        },
+        .expected_files = &.{
+            "bundle/Dockerfile",
+            "bundle/compose.yml",
+            "bundle/assets/style.css",
+            "bundle/public/favicon.ico",
+        },
+    });
 }
 
 test "fmt" {
+    try test_cmd(.{
+        .args = &.{ "fmt", "site" ++ std.fs.path.sep_str ++ "pages" },
+        .expected_exit_code = 0,
+        .expected_stdout_strings = &.{
+            "site" ++ std.fs.path.sep_str ++ "pages" ++ std.fs.path.sep_str ++ "layout.zx",
+            "site" ++ std.fs.path.sep_str ++ "pages" ++ std.fs.path.sep_str ++ "page.zx",
+        },
+    });
+}
+
+const TestCmdOptions = struct {
+    args: []const []const u8,
+    expected_stderr_strings: []const []const u8 = &.{},
+    expected_stdout_strings: []const []const u8 = &.{},
+    expected_exit_code: i32 = 0,
+    expected_files: []const []const u8 = &.{},
+};
+fn test_cmd(options: TestCmdOptions) !void {
     const zx_bin_abs = try getZxPath();
     const test_dir_abs = try getTestDirPath();
     defer allocator.free(zx_bin_abs);
     defer allocator.free(test_dir_abs);
 
-    var child = std.process.Child.init(&.{ zx_bin_abs, "fmt", "site" ++ std.fs.path.sep_str ++ "pages" }, allocator);
+    // Delete bundle or dist directory if it exists
+    var test_dir = try std.fs.openDirAbsolute(test_dir_abs, .{});
+    defer test_dir.close();
+    test_dir.deleteTree("bundle") catch {};
+    test_dir.deleteTree("dist") catch {};
+
+    var args = std.ArrayList([]const u8).empty;
+    defer args.deinit(allocator);
+    try args.appendSlice(allocator, &.{zx_bin_abs});
+    try args.appendSlice(allocator, options.args);
+
+    var child = std.process.Child.init(args.items, allocator);
     child.cwd = test_dir_abs;
     child.stdout_behavior = .Pipe;
     child.stderr_behavior = .Pipe;
@@ -401,17 +285,35 @@ test "fmt" {
     defer stderr.deinit(allocator);
     try child.collectOutput(allocator, &stdout, &stderr, 8192);
 
-    // std.debug.print("stderr: {s}\n", .{stderr.items});
-
-    const expected_strings = [_][]const u8{
-        "site" ++ std.fs.path.sep_str ++ "pages" ++ std.fs.path.sep_str ++ "layout.zx",
-        "site" ++ std.fs.path.sep_str ++ "pages" ++ std.fs.path.sep_str ++ "page.zx",
-    };
-
-    for (expected_strings) |expected_string| {
+    for (options.expected_stderr_strings) |expected_string| {
+        try std.testing.expect(std.mem.indexOf(u8, stderr.items, expected_string) != null);
+    }
+    for (options.expected_stdout_strings) |expected_string| {
         try std.testing.expect(std.mem.indexOf(u8, stdout.items, expected_string) != null);
     }
-    try std.testing.expectEqual(stderr.items.len, 0);
+    const exit_code = try child.wait();
+    switch (exit_code) {
+        .Exited => |code| try std.testing.expectEqual(code, options.expected_exit_code),
+        else => try std.testing.expect(false),
+    }
+
+    for (options.expected_files) |expected_file| {
+        var expected_file_path = std.ArrayList([]const u8).empty;
+        defer expected_file_path.deinit(allocator);
+        try expected_file_path.appendSlice(allocator, &.{test_dir_abs});
+
+        var path_iter = std.mem.splitSequence(u8, expected_file, "/");
+        while (path_iter.next()) |part| {
+            if (part.len > 0) {
+                try expected_file_path.append(allocator, part);
+            }
+        }
+        const expected_file_path_str = try std.fs.path.join(allocator, expected_file_path.items);
+        defer allocator.free(expected_file_path_str);
+
+        const file_stat = try std.fs.cwd().statFile(expected_file_path_str);
+        try std.testing.expectEqual(file_stat.kind, .file);
+    }
 }
 
 const local_zon_str =
@@ -435,6 +337,7 @@ const local_zon_str =
 
 test "tests:beforeAll" {
     std.fs.cwd().deleteTree("test/tmp") catch {};
+    std.fs.cwd().makeDir("test/tmp") catch {};
 }
 
 test "tests:afterAll" {
