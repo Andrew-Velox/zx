@@ -50,10 +50,26 @@ test "if_for" {
 test "if_switch" {
     try test_fmt("control_flow/if_switch");
 }
+test "if_else_if" {
+    if (true) return error.Todo;
+    try test_fmt("control_flow/if_else_if");
+}
+test "if_capture" {
+    if (true) return error.Todo;
+    try test_fmt("control_flow/if_capture");
+}
 
 // === For ===
 test "for" {
     try test_fmt("control_flow/for");
+}
+test "for_capture" {
+    if (true) return error.Todo;
+    try test_fmt("control_flow/for_capture");
+}
+test "for_capture_to_component" {
+    if (true) return error.Todo;
+    try test_fmt("control_flow/for_capture_to_component");
 }
 test "for_block" {
     try test_fmt("control_flow/for_block");
@@ -153,6 +169,10 @@ test "expression_function_call" {
     if (true) return error.Todo;
     try test_fmt("expression/function_call");
 }
+test "expression_multiline_string" {
+    if (true) return error.Todo;
+    try test_fmt("expression/multiline_string");
+}
 
 test "component_basic" {
     try test_fmt("component/basic");
@@ -203,6 +223,10 @@ test "attribute_builtin_escaping" {
 test "attribute_dynamic" {
     if (true) return error.Todo;
     try test_fmt("attribute/dynamic");
+}
+test "attribute_types" {
+    if (true) return error.Todo;
+    try test_fmt("attribute/types");
 }
 
 // === Element ===
