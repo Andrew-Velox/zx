@@ -284,6 +284,9 @@ pub fn renderNodeWithContext(
         .zx_self_closing_element => {
             try renderSelfClosingElement(self, node, w, ctx);
         },
+        .zx_fragment => {
+            try renderFragment(self, node, w, ctx);
+        },
         .zx_start_tag => {
             try renderStartTag(self, node, w);
         },
@@ -422,6 +425,83 @@ fn renderBlock(
     }
 
     try w.writeAll(")");
+}
+
+/// Render zx_fragment: <>...</>
+fn renderFragment(
+    self: *Ast,
+    node: ts.Node,
+    w: *std.io.Writer,
+    ctx: *FormatContext,
+) !void {
+    const child_count = node.childCount();
+    var content_nodes = std.ArrayList(ts.Node){};
+    defer content_nodes.deinit(self.allocator);
+
+    // Collect all child nodes (skip fragment opening/closing tags)
+    var i: u32 = 0;
+    while (i < child_count) : (i += 1) {
+        const child = node.child(i) orelse continue;
+        const child_kind = NodeKind.fromNode(child);
+        // Skip fragment markers (< and > tokens)
+        if (child_kind == .zx_child) {
+            try content_nodes.append(self.allocator, child);
+        }
+    }
+
+    try w.writeAll("<>");
+
+    // Check if we have meaningful content
+    const has_meaningful_content = blk: {
+        for (content_nodes.items) |child| {
+            if (hasMeaningfulContent(self, child)) {
+                break :blk true;
+            }
+        }
+        break :blk false;
+    };
+
+    // Check if content is multiline
+    const is_vertical = blk: {
+        if (!has_meaningful_content) break :blk false;
+
+        // Check for newlines in the fragment
+        const elem_start = node.startByte();
+        const elem_end = node.endByte();
+        if (elem_start < elem_end and elem_end <= self.source.len) {
+            if (std.mem.indexOf(u8, self.source[elem_start..elem_end], "\n") != null) {
+                break :blk true;
+            }
+        }
+        break :blk false;
+    };
+
+    if (is_vertical) {
+        ctx.indent_level += 1;
+    }
+
+    // Render content
+    var rendered_any = false;
+    for (content_nodes.items) |child| {
+        if (!hasMeaningfulContent(self, child)) continue;
+
+        if (is_vertical) {
+            try w.writeAll("\n");
+            try ctx.writeIndent(w);
+        }
+        try renderChild(self, child, w, ctx);
+        rendered_any = true;
+    }
+
+    if (is_vertical and rendered_any) {
+        ctx.indent_level -= 1;
+        try w.writeAll("\n");
+        try ctx.writeIndent(w);
+    } else if (is_vertical) {
+        ctx.indent_level -= 1;
+    }
+
+    try w.writeAll("</>");
 }
 
 /// Render zx_element: <tag>content</tag>
@@ -728,33 +808,47 @@ fn renderExpressionBlock(
     }
 }
 
-/// Render if expression: {if (cond) (<then>) else (<else>)}
+/// Render if expression: {if (cond) |payload| (<then>) else (<else>)}
+/// Supports payload captures and else-if chains
 fn renderIfExpression(
     self: *Ast,
     node: ts.Node,
     w: *std.io.Writer,
     ctx: *FormatContext,
-) !void {
+) anyerror!void {
     var condition_node: ?ts.Node = null;
+    var payload_node: ?ts.Node = null;
     var then_node: ?ts.Node = null;
     var else_node: ?ts.Node = null;
 
     const child_count = node.childCount();
-    var zx_block_count: u32 = 0;
+    var in_condition = false;
+    var in_then = false;
 
     var i: u32 = 0;
     while (i < child_count) : (i += 1) {
         const child = node.child(i) orelse continue;
-        condition_node = node.childByFieldName("condition");
-
+        const child_type = child.kind();
         const child_kind = NodeKind.fromNode(child);
-        if (child_kind == .zx_block or child_kind == .parenthesized_expression) {
-            if (zx_block_count == 0) {
-                then_node = child;
-            } else if (zx_block_count == 1) {
-                else_node = child;
-            }
-            zx_block_count += 1;
+
+        if (std.mem.eql(u8, child_type, "if")) {
+            in_condition = true;
+        } else if (std.mem.eql(u8, child_type, "(") and in_condition) {
+            // Start of condition
+        } else if (std.mem.eql(u8, child_type, ")") and in_condition) {
+            in_condition = false;
+            in_then = true;
+        } else if (std.mem.eql(u8, child_type, "else")) {
+            in_then = false;
+        } else if (in_condition and condition_node == null) {
+            condition_node = child;
+        } else if (in_then and child_kind == .payload) {
+            // Capture payload like |un|
+            payload_node = child;
+        } else if (in_then and then_node == null) {
+            then_node = child;
+        } else if (!in_condition and !in_then and then_node != null) {
+            else_node = child;
         }
     }
 
@@ -775,38 +869,131 @@ fn renderIfExpression(
 
     try w.writeAll(" ");
 
+    // Payload (e.g., |un|)
+    if (payload_node) |payload| {
+        const payload_text = try self.getNodeText(payload);
+        try w.writeAll(payload_text);
+        try w.writeAll(" ");
+    }
+
     ctx.indent_level -= 1;
     // Then branch
     if (then_node) |then_b| {
-        const then_kind = NodeKind.fromNode(then_b);
-        switch (then_kind) {
-            .zx_block => {
-                try renderBlockInline(self, then_b, w, ctx);
-            },
-            .parenthesized_expression => {
-                try w.writeAll(try self.getNodeText(then_b));
-            },
-            else => {},
-        }
+        try renderBranch(self, then_b, w, ctx);
     }
 
     // Else branch
     if (else_node) |else_b| {
         try w.writeAll(" else ");
-        const else_kind = NodeKind.fromNode(else_b);
-        switch (else_kind) {
-            .zx_block => {
-                try renderBlockInline(self, else_b, w, ctx);
-            },
-            .parenthesized_expression => {
-                try w.writeAll(try self.getNodeText(else_b));
-            },
-            else => {},
-        }
+        try renderBranch(self, else_b, w, ctx);
     }
 
     try w.writeAll("}");
     ctx.indent_level += 1;
+}
+
+/// Helper to render if/else branches consistently
+/// Handles else-if chains by recursively calling renderIfExpression
+fn renderBranch(
+    self: *Ast,
+    node: ts.Node,
+    w: *std.io.Writer,
+    ctx: *FormatContext,
+) anyerror!void {
+    const node_kind = NodeKind.fromNode(node);
+    switch (node_kind) {
+        .zx_block => {
+            try renderBlockInline(self, node, w, ctx);
+        },
+        .if_expression => {
+            // Handle else-if chains - render without outer braces
+            try renderIfExpressionInner(self, node, w, ctx);
+        },
+        .parenthesized_expression => {
+            try w.writeAll(try self.getNodeText(node));
+        },
+        else => {
+            try w.writeAll(try self.getNodeText(node));
+        },
+    }
+}
+
+/// Render if expression without outer braces (for else-if chains)
+fn renderIfExpressionInner(
+    self: *Ast,
+    node: ts.Node,
+    w: *std.io.Writer,
+    ctx: *FormatContext,
+) anyerror!void {
+    var condition_node: ?ts.Node = null;
+    var payload_node: ?ts.Node = null;
+    var then_node: ?ts.Node = null;
+    var else_node: ?ts.Node = null;
+
+    const child_count = node.childCount();
+    var in_condition = false;
+    var in_then = false;
+
+    var i: u32 = 0;
+    while (i < child_count) : (i += 1) {
+        const child = node.child(i) orelse continue;
+        const child_type = child.kind();
+        const child_kind = NodeKind.fromNode(child);
+
+        if (std.mem.eql(u8, child_type, "if")) {
+            in_condition = true;
+        } else if (std.mem.eql(u8, child_type, "(") and in_condition) {
+            // Start of condition
+        } else if (std.mem.eql(u8, child_type, ")") and in_condition) {
+            in_condition = false;
+            in_then = true;
+        } else if (std.mem.eql(u8, child_type, "else")) {
+            in_then = false;
+        } else if (in_condition and condition_node == null) {
+            condition_node = child;
+        } else if (in_then and child_kind == .payload) {
+            payload_node = child;
+        } else if (in_then and then_node == null) {
+            then_node = child;
+        } else if (!in_condition and !in_then and then_node != null) {
+            else_node = child;
+        }
+    }
+
+    try w.writeAll("if ");
+
+    // Condition
+    if (condition_node) |cond| {
+        const cond_text = try self.getNodeText(cond);
+        const trimmed = std.mem.trim(u8, cond_text, &std.ascii.whitespace);
+        if (trimmed.len > 0 and trimmed[0] != '(') {
+            try w.writeAll("(");
+            try w.writeAll(trimmed);
+            try w.writeAll(")");
+        } else {
+            try w.writeAll(trimmed);
+        }
+    }
+
+    try w.writeAll(" ");
+
+    // Payload
+    if (payload_node) |payload| {
+        const payload_text = try self.getNodeText(payload);
+        try w.writeAll(payload_text);
+        try w.writeAll(" ");
+    }
+
+    // Then branch
+    if (then_node) |then_b| {
+        try renderBranch(self, then_b, w, ctx);
+    }
+
+    // Else branch
+    if (else_node) |else_b| {
+        try w.writeAll(" else ");
+        try renderBranch(self, else_b, w, ctx);
+    }
 }
 
 /// Render for expression: {for (items) |item| (<body>)}
@@ -948,47 +1135,60 @@ fn renderSwitchExpression(
 
     const child_count = node.childCount();
     var i: u32 = 0;
+    var found_switch = false;
     while (i < child_count) : (i += 1) {
         const child = node.child(i) orelse continue;
+        const child_type = child.kind();
         const child_kind = NodeKind.fromNode(child);
 
-        switch (child_kind) {
-            .identifier, .field_expression => {
-                switch_expr_node = child;
-            },
-            .switch_case => {
-                var pattern_node: ?ts.Node = null;
-                var value_node: ?ts.Node = null;
+        if (std.mem.eql(u8, child_type, "switch")) {
+            found_switch = true;
+            continue;
+        }
 
-                const case_child_count = child.childCount();
-                var j: u32 = 0;
-                while (j < case_child_count) : (j += 1) {
-                    const case_child = child.child(j) orelse continue;
-                    const case_child_kind = NodeKind.fromNode(case_child);
+        // Skip delimiters
+        if (std.mem.eql(u8, child_type, "(") or
+            std.mem.eql(u8, child_type, ")") or
+            std.mem.eql(u8, child_type, "{") or
+            std.mem.eql(u8, child_type, "}"))
+        {
+            continue;
+        }
 
-                    switch (case_child_kind) {
-                        .zx_block, .parenthesized_expression, .for_expression, .while_expression, .switch_expression, .if_expression => {
-                            value_node = case_child;
-                        },
-                        else => {
-                            if (pattern_node == null and case_child.childCount() > 0) {
-                                pattern_node = case_child;
-                            }
-                        },
-                    }
+        if (found_switch and switch_expr_node == null and child_kind != .switch_case) {
+            switch_expr_node = child;
+            continue;
+        }
+
+        if (child_kind == .switch_case) {
+            // Parse switch case: pattern '=>' value
+            var pattern_node: ?ts.Node = null;
+            var value_node: ?ts.Node = null;
+            var seen_arrow = false;
+
+            const case_child_count = child.childCount();
+            var j: u32 = 0;
+            while (j < case_child_count) : (j += 1) {
+                const case_child = child.child(j) orelse continue;
+
+                if (std.mem.eql(u8, case_child.kind(), "=>")) {
+                    seen_arrow = true;
+                } else if (!seen_arrow and pattern_node == null) {
+                    pattern_node = case_child;
+                } else if (seen_arrow and value_node == null) {
+                    value_node = case_child;
                 }
+            }
 
-                if (pattern_node) |p| {
-                    const pattern_text = try self.getNodeText(p);
-                    if (value_node) |v| {
-                        try cases.append(self.allocator, .{
-                            .pattern = pattern_text,
-                            .value = v,
-                        });
-                    }
+            if (pattern_node) |p| {
+                const pattern_text = try self.getNodeText(p);
+                if (value_node) |v| {
+                    try cases.append(self.allocator, .{
+                        .pattern = pattern_text,
+                        .value = v,
+                    });
                 }
-            },
-            else => {},
+            }
         }
     }
 
@@ -1008,25 +1208,268 @@ fn renderSwitchExpression(
         ctx.indent_level -= 1;
         try w.writeAll(std.mem.trim(u8, case.pattern, &std.ascii.whitespace));
         try w.writeAll(" => ");
-        const case_value_kind = NodeKind.fromNode(case.value);
-        switch (case_value_kind) {
-            .zx_block => {
-                try renderBlockInline(self, case.value, w, ctx);
-            },
-            .parenthesized_expression => {
-                try w.writeAll(try self.getNodeText(case.value));
-            },
-            .for_expression, .while_expression, .switch_expression, .if_expression => {
-                try renderExpressionBlock(self, case.value, w, ctx);
-            },
-            else => {},
-        }
+        try renderCaseValue(self, case.value, w, ctx);
         try w.writeAll(",");
     }
 
     try w.writeAll("\n");
     try ctx.writeIndent(w);
     try w.writeAll("}}");
+}
+
+/// Render switch case value, handling parenthesized expressions with nested control flow/zx
+fn renderCaseValue(
+    self: *Ast,
+    node: ts.Node,
+    w: *std.io.Writer,
+    ctx: *FormatContext,
+) anyerror!void {
+    const kind = NodeKind.fromNode(node);
+
+    switch (kind) {
+        .zx_block => {
+            try renderBlockInline(self, node, w, ctx);
+        },
+        .if_expression => {
+            try renderIfExpressionInner(self, node, w, ctx);
+        },
+        .for_expression => {
+            try renderForExpressionInner(self, node, w, ctx);
+        },
+        .while_expression => {
+            try renderWhileExpressionInner(self, node, w, ctx);
+        },
+        .switch_expression => {
+            try renderSwitchExpressionInner(self, node, w, ctx);
+        },
+        .parenthesized_expression => {
+            // Check if contains control flow or zx_block
+            if (findSpecialChild(node)) |child| {
+                try renderCaseValue(self, child, w, ctx);
+            } else {
+                // Simple parenthesized expression like ("Admin")
+                try w.writeAll(try self.getNodeText(node));
+            }
+        },
+        else => {
+            try w.writeAll(try self.getNodeText(node));
+        },
+    }
+}
+
+/// Find control flow or zx_block inside a node
+fn findSpecialChild(node: ts.Node) ?ts.Node {
+    const child_count = node.childCount();
+    var i: u32 = 0;
+    while (i < child_count) : (i += 1) {
+        const child = node.child(i) orelse continue;
+        switch (NodeKind.fromNode(child)) {
+            .if_expression, .for_expression, .while_expression, .switch_expression, .zx_block => return child,
+            else => {
+                if (findSpecialChild(child)) |found| return found;
+            },
+        }
+    }
+    return null;
+}
+
+/// Render for expression without outer braces (for use in case values)
+fn renderForExpressionInner(
+    self: *Ast,
+    node: ts.Node,
+    w: *std.io.Writer,
+    ctx: *FormatContext,
+) anyerror!void {
+    var iterable_node: ?ts.Node = null;
+    var payload_node: ?ts.Node = null;
+    var body_node: ?ts.Node = null;
+
+    const child_count = node.childCount();
+    var i: u32 = 0;
+    while (i < child_count) : (i += 1) {
+        const child = node.child(i) orelse continue;
+        const child_kind = NodeKind.fromNode(child);
+
+        switch (child_kind) {
+            .identifier, .field_expression => {
+                if (iterable_node == null) {
+                    iterable_node = child;
+                }
+            },
+            .payload => {
+                payload_node = child;
+            },
+            .zx_block, .parenthesized_expression => {
+                body_node = child;
+            },
+            else => {},
+        }
+    }
+
+    try w.writeAll("for (");
+
+    if (iterable_node) |it| {
+        const it_text = try self.getNodeText(it);
+        try w.writeAll(it_text);
+    }
+
+    try w.writeAll(") ");
+
+    if (payload_node) |pay| {
+        const pay_text = try self.getNodeText(pay);
+        try w.writeAll(pay_text);
+    }
+
+    try w.writeAll(" ");
+
+    if (body_node) |body| {
+        try renderBranch(self, body, w, ctx);
+    }
+}
+
+/// Render while expression without outer braces (for use in case values)
+fn renderWhileExpressionInner(
+    self: *Ast,
+    node: ts.Node,
+    w: *std.io.Writer,
+    ctx: *FormatContext,
+) anyerror!void {
+    var condition_node: ?ts.Node = null;
+    var continue_node: ?ts.Node = null;
+    var body_node: ?ts.Node = null;
+
+    const child_count = node.childCount();
+    var i: u32 = 0;
+    while (i < child_count) : (i += 1) {
+        const child = node.child(i) orelse continue;
+        condition_node = node.childByFieldName("condition");
+
+        const child_kind = NodeKind.fromNode(child);
+        switch (child_kind) {
+            .assignment_expression => {
+                continue_node = child;
+            },
+            .zx_block => {
+                body_node = child;
+            },
+            else => {},
+        }
+    }
+
+    try w.writeAll("while (");
+
+    if (condition_node) |cond| {
+        const cond_text = try self.getNodeText(cond);
+        try w.writeAll(std.mem.trim(u8, cond_text, &std.ascii.whitespace));
+    }
+
+    try w.writeAll(")");
+
+    if (continue_node) |cont| {
+        try w.writeAll(" : (");
+        const cont_text = try self.getNodeText(cont);
+        try w.writeAll(std.mem.trim(u8, cont_text, &std.ascii.whitespace));
+        try w.writeAll(")");
+    }
+
+    try w.writeAll(" ");
+
+    if (body_node) |body| {
+        try renderBlockInline(self, body, w, ctx);
+    }
+}
+
+/// Render switch expression without outer braces (for use in case values)
+fn renderSwitchExpressionInner(
+    self: *Ast,
+    node: ts.Node,
+    w: *std.io.Writer,
+    ctx: *FormatContext,
+) anyerror!void {
+    var switch_expr_node: ?ts.Node = null;
+    var cases = std.ArrayList(struct { pattern: []const u8, value: ts.Node }){};
+    defer cases.deinit(self.allocator);
+
+    const child_count = node.childCount();
+    var i: u32 = 0;
+    var found_switch = false;
+    while (i < child_count) : (i += 1) {
+        const child = node.child(i) orelse continue;
+        const child_type = child.kind();
+        const child_kind = NodeKind.fromNode(child);
+
+        if (std.mem.eql(u8, child_type, "switch")) {
+            found_switch = true;
+            continue;
+        }
+
+        if (std.mem.eql(u8, child_type, "(") or
+            std.mem.eql(u8, child_type, ")") or
+            std.mem.eql(u8, child_type, "{") or
+            std.mem.eql(u8, child_type, "}"))
+        {
+            continue;
+        }
+
+        if (found_switch and switch_expr_node == null and child_kind != .switch_case) {
+            switch_expr_node = child;
+            continue;
+        }
+
+        if (child_kind == .switch_case) {
+            var pattern_node: ?ts.Node = null;
+            var value_node: ?ts.Node = null;
+            var seen_arrow = false;
+
+            const case_child_count = child.childCount();
+            var j: u32 = 0;
+            while (j < case_child_count) : (j += 1) {
+                const case_child = child.child(j) orelse continue;
+
+                if (std.mem.eql(u8, case_child.kind(), "=>")) {
+                    seen_arrow = true;
+                } else if (!seen_arrow and pattern_node == null) {
+                    pattern_node = case_child;
+                } else if (seen_arrow and value_node == null) {
+                    value_node = case_child;
+                }
+            }
+
+            if (pattern_node) |p| {
+                const pattern_text = try self.getNodeText(p);
+                if (value_node) |v| {
+                    try cases.append(self.allocator, .{
+                        .pattern = pattern_text,
+                        .value = v,
+                    });
+                }
+            }
+        }
+    }
+
+    try w.writeAll("switch (");
+
+    if (switch_expr_node) |expr| {
+        const expr_text = try self.getNodeText(expr);
+        try w.writeAll(expr_text);
+    }
+
+    try w.writeAll(") {");
+
+    for (cases.items) |case| {
+        try w.writeAll("\n");
+        ctx.indent_level += 1;
+        try ctx.writeIndent(w);
+        ctx.indent_level -= 1;
+        try w.writeAll(std.mem.trim(u8, case.pattern, &std.ascii.whitespace));
+        try w.writeAll(" => ");
+        try renderCaseValue(self, case.value, w, ctx);
+        try w.writeAll(",");
+    }
+
+    try w.writeAll("\n");
+    try ctx.writeIndent(w);
+    try w.writeAll("}");
 }
 
 /// Render zx_block inline (for use in control flow expressions)
@@ -1056,6 +1499,8 @@ fn renderBlockInline(
     try w.writeAll("(");
 
     if (element_node) |elem| {
+        const elem_kind = NodeKind.fromNode(elem);
+
         // Check if element is multiline
         const elem_start = elem.startByte();
         const elem_end = elem.endByte();
@@ -1068,7 +1513,12 @@ fn renderBlockInline(
             try w.writeAll("\n");
             ctx.indent_level += 2;
             try ctx.writeIndent(w);
-            try renderNodeWithContext(self, elem, w, ctx);
+            switch (elem_kind) {
+                .zx_element => try renderElement(self, elem, w, ctx),
+                .zx_self_closing_element => try renderSelfClosingElement(self, elem, w, ctx),
+                .zx_fragment => try renderFragment(self, elem, w, ctx),
+                else => try renderNodeWithContext(self, elem, w, ctx),
+            }
             ctx.indent_level -= 2;
             try w.writeAll("\n");
             ctx.indent_level += 1;
@@ -1076,9 +1526,16 @@ fn renderBlockInline(
             try w.writeAll(")");
             ctx.indent_level -= 1;
         } else {
-            try renderNodeWithContext(self, elem, w, ctx);
+            switch (elem_kind) {
+                .zx_element => try renderElement(self, elem, w, ctx),
+                .zx_self_closing_element => try renderSelfClosingElement(self, elem, w, ctx),
+                .zx_fragment => try renderFragment(self, elem, w, ctx),
+                else => try renderNodeWithContext(self, elem, w, ctx),
+            }
             try w.writeAll(")");
         }
+    } else {
+        try w.writeAll(")");
     }
 }
 
