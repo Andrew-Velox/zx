@@ -71,6 +71,7 @@ pub const TestFileCache = struct {
         "attribute/component",
         "attribute/builtin_escaping",
         "attribute/dynamic",
+        "attribute/types",
 
         // Element
         "element/void",

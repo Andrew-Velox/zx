@@ -204,6 +204,10 @@ test "attribute_dynamic" {
     try test_transpile("attribute/dynamic");
     try test_render(@import("./../data/attribute/dynamic.zig").Page);
 }
+test "attribute_types" {
+    try test_transpile("attribute/types");
+    try test_render(@import("./../data/attribute/types.zig").Page);
+}
 
 // === Element ===
 test "element_void" {
