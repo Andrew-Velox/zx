@@ -2439,6 +2439,7 @@ code[class*="language-"] {
 .sandbox-code-content {
     background: var(--sandbox-bg);
     overflow: auto;
+    position: relative;
 }
 
 .sandbox-code-content pre {
@@ -2447,7 +2448,9 @@ code[class*="language-"] {
     border: none;
     border-radius: 0;
     background: transparent;
-    height: -webkit-fill-available;
+    height: 100%;
+    min-height: 0;
+    position: static;
 }
 
 .sandbox-code-content code {

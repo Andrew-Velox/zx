@@ -215,7 +215,7 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
 
 fn LearnHeader(allocator: zx.Allocator) zx.Component {
     return (
-        <section class="section learn-header" @allocator={allocator}>
+        <section class="section learn-header" style="margin-bottom: 0;" @allocator={allocator}>
             <p class="section-category">Learn ZX</p>
             <h1>Quick Start</h1>
             <p class="lead">Welcome to the ZX documentation! This page will give you an introduction to the core concepts you'll use daily when building web applications with ZX.</p>
@@ -259,7 +259,7 @@ fn Installation(_: zx.Allocator) zx.Component {
                 <div class="install-box-content">
                     <div class="install-tab-content" id="content-unix">
                         <div class="install-code">
-                            <span class="install-prompt">$</span>
+                            <span class="install-prompt">$ </span>
                             <span class="function">curl</span>
                             <span class="operator"> -fsSL </span>
                             <span class="string">https://ziex.dev/install</span>
@@ -269,7 +269,7 @@ fn Installation(_: zx.Allocator) zx.Component {
                     </div>
                     <div class="install-tab-content" id="content-windows">
                         <div class="install-code">
-                            <span class="install-prompt">{">"}</span>
+                            <span class="install-prompt">{"> "}</span>
                             <span class="function">powershell</span>
                             <span class="operator"> -c </span>
                             <span class="string">"irm ziex.dev/install.ps1 | iex"</span>
@@ -294,7 +294,7 @@ fn Installation(_: zx.Allocator) zx.Component {
                 <div class="install-box-content">
                     <div class="install-tab-content" id="content-zig-mac">
                         <div class="install-code">
-                            <span class="install-prompt">$</span>
+                            <span class="install-prompt">$ </span>
                             <span class="function">brew</span>
                             <span class="operator"> install </span>
                             <span class="variable">zig</span>
@@ -302,7 +302,7 @@ fn Installation(_: zx.Allocator) zx.Component {
                     </div>
                     <div class="install-tab-content" id="content-zig-win">
                         <div class="install-code">
-                            <span class="install-prompt">{">"}</span>
+                            <span class="install-prompt">{"> "}</span>
                             <span class="function">winget</span>
                             <span class="operator"> install -e --id </span>
                             <span class="variable">zig.zig</span>
@@ -327,7 +327,7 @@ fn CreateProject(allocator: zx.Allocator) zx.Component {
             <div class="install-box install-box-simple">
                 <div class="install-box-content">
                     <div class="install-code">
-                        <span class="install-prompt">$</span>
+                        <span class="install-prompt">$ </span>
                         <span class="function">zx</span>
                         <span class="operator"> init </span>
                         <span class="variable">my-app</span>
@@ -335,12 +335,12 @@ fn CreateProject(allocator: zx.Allocator) zx.Component {
                 </div>
             </div>
             
-            <p>Start the development server:</p>
+            <p>Start the ZX Application:</p>
             <div class="install-box install-box-simple">
                 <div class="install-box-content">
                     <div class="install-code install-code-multiline">
-                        <div><span class="install-prompt">$</span> <span class="function">cd </span> <span class="variable">my-app</span></div>
-                        <div><span class="install-prompt">$</span> <span class="function">zig </span> <span class="operator">build </span><span class="variable">serve</span></div>
+                        <div><span class="install-prompt">$ </span> <span class="function">cd </span> <span class="variable">my-app</span></div>
+                        <div><span class="install-prompt">$ </span> <span class="function">zig </span> <span class="operator">build </span><span class="variable">serve</span></div>
                     </div>
                 </div>
             </div>

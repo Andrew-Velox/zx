@@ -699,11 +699,9 @@ body {
     line-height: 1.6;
     color: var(--zx-gray-light);
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: visible;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
-    overscroll-behavior-y: none;
-    touch-action: pan-x;
+    touch-action: pan-x pan-y;
 }
 
 .code-example code {
@@ -875,9 +873,9 @@ body {
     .code-example pre {
         padding: 1.5rem 1rem;
         font-size: 0.7rem;
-        overscroll-behavior-x: contain;
-        overscroll-behavior-y: none;
-        -webkit-overflow-scrolling: touch;
+        overflow-x: auto;
+        overflow-y: visible;
+        touch-action: pan-x pan-y;
     }
     
     .code-example-header {
@@ -915,6 +913,9 @@ body {
     .code-example pre {
         font-size: 0.65rem;
         padding: 1rem 0.75rem;
+        overflow-x: auto;
+        overflow-y: visible;
+        touch-action: pan-x pan-y;
     }
 }
 
