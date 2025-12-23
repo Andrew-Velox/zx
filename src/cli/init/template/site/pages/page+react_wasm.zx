@@ -12,8 +12,8 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
             <a href="https://ziex.dev" target="_blank">See ZX Docs →</a>
             <br/>
             <div style="height: 150px; margin: 10px;">
-                <ReactCounterComponent @rendering={.csr} counter={counter} />
-                <ZigCounterComponent @rendering={.csz} counter={counter} />
+                <ReactCounterComponent @rendering={.react} counter={counter} />
+                <ZigCounterComponent @rendering={.client} counter={counter} />
             </div>
             <h4>ZX + React + WASM</h4>
             <hr/>

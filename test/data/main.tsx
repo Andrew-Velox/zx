@@ -3,21 +3,21 @@ import { createRoot } from 'react-dom/client';
 
 const components = [
   {
-    "type": "csr",
+    "type": "react",
     "id": "zx-dcde04c415da9d1b15ca2690d8b497ae",
     "name": "CounterComponent",
-    "path": "component/csr_react.tsx",
-    "import": async () => (await import('./component/csr_react.tsx')).default
+    "path": "component/react.tsx",
+    "import": async () => (await import('./component/react.tsx')).default
   },
   {
-    "type": "csr",
+    "type": "react",
     "id": "zx-dcde04c415da9d1b15ca2690d8b497ae",
     "name": "CounterComponent",
-    "path": "component/csr_react.tsx",
-    "import": async () => (await import('./component/csr_react.tsx')).default
+    "path": "component/react.tsx",
+    "import": async () => (await import('./component/react.tsx')).default
   },
   {
-    "type": "csr",
+    "type": "react",
     "id": "zx-817a92c3e8f78257d9993f89eb0cb6bb",
     "name": "AnotherComponent",
     "path": "component/csr_react_multiple.tsx",

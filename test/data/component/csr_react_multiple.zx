@@ -3,15 +3,15 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
 
     return (
         <main @allocator={allocator}>
-            <CounterComponent @rendering={.csr} max_count={max_count} />
-            <AnotherComponent @rendering={.csr} />
-            <AnotherComponent @rendering={.csr} />
-            <AnotherSameComponent @rendering={.csr} />
+            <CounterComponent @rendering={.react} max_count={max_count} />
+            <AnotherComponent @rendering={.react} />
+            <AnotherComponent @rendering={.react} />
+            <AnotherSameComponent @rendering={.react} />
         </main>
     );
 }
 
 const zx = @import("zx");
-const CounterComponent = @jsImport("csr_react.tsx");
+const CounterComponent = @jsImport("react.tsx");
 const AnotherComponent = @jsImport("csr_react_multiple.tsx");
 const AnotherSameComponent = @jsImport("csr_react_multiple.tsx");

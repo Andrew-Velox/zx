@@ -228,7 +228,7 @@ const ZXElement = struct {
     children: std.ArrayList(Child),
     allocator: std.mem.Allocator,
     builtin_allocator: ?[]const u8 = null, // Builtin @allocator attribute value (expression)
-    builtin_rendering: ?[]const u8 = null, // Builtin @rendering attribute value (expression like .csr)
+    builtin_rendering: ?[]const u8 = null, // Builtin @rendering attribute value (expression like .react)
     builtin_escaping: ?[]const u8 = null, // Builtin @escaping attribute value (expression like .raw)
 
     const Attribute = struct {
@@ -2739,7 +2739,7 @@ fn renderJsxAsTokensWithLoopContext(allocator: std.mem.Allocator, output: *Token
     if (isCustomComponent(elem.tag)) {
         // Check if this component has @rendering attribute (client-side rendering)
         if (elem.builtin_rendering) |rendering_expr| {
-            // Parse the rendering type from the expression (e.g., ".csr" or ".csz")
+            // Parse the rendering type from the expression (e.g., ".react" or ".client")
             const component_type = Transpile.ClientComponentMetadata.Type.from(rendering_expr);
 
             // For client components, use _zx.client()
@@ -4937,7 +4937,7 @@ fn renderJsxAsTokensWithLoopContext(allocator: std.mem.Allocator, output: *Token
                         if (isCustomComponent(child_elem.tag)) {
                             // Check if this component has @rendering attribute (client-side rendering)
                             if (child_elem.builtin_rendering) |rendering_expr| {
-                                // Parse the rendering type from the expression (e.g., ".csr" or ".csz")
+                                // Parse the rendering type from the expression (e.g., ".react" or ".client")
                                 const component_type = Transpile.ClientComponentMetadata.Type.from(rendering_expr);
 
                                 // For client components, use _zx.client()

@@ -44,22 +44,22 @@ ZX components allocate memory for:
 The \`@rendering\` attribute controls how a component is rendered on the client side. Used to enable client-side interactivity for components.
 
 **Values:**
-- \`.csr\` (Client Side React) - Component is a React component rendered client-side
-- \`.csz\` (Client Side Zig) - Component is a Zig WASM component rendered client-side
+- \`.react\` (Client Side React) - Component is a React component rendered client-side
+- \`.client\` (Client Side Zig) - Component is a Zig WASM component rendered client-side
 
 **Usage:**
 \`\`\`zx
 // React component (CSR)
-<CounterComponent @rendering={.csr} max_count={10} />
+<CounterComponent @rendering={.react} max_count={10} />
 
-// Zig WASM component (CSZ)  
-<TodoApp @rendering={.csz} />
+// Zig WASM component (Client)  
+<TodoApp @rendering={.client} />
 \`\`\`
 
 **Notes:**
 - CSR components should have a corresponding \`.tsx\` file with a default export
-- CSZ components are compiled to WebAssembly for client-side execution`,
-    values: [".csr", ".csz"],
+- Client components are compiled to WebAssembly for client-side execution`,
+    values: [".react", ".client"],
   },
   "@escaping": {
     description: `**@escaping** - Content Escaping Mode
@@ -279,7 +279,7 @@ export function registerHtmlAutoCompletion(
       }
     }
 
-    // Check if hovering over a builtin attribute value pattern (e.g., .csr, .csz, .raw)
+    // Check if hovering over a builtin attribute value pattern (e.g., .react, .client, .raw)
     const valueRange = doc.getWordRangeAtPosition(pos, /\.[a-zA-Z_][a-zA-Z0-9_]*/);
     if (valueRange) {
       const value = doc.getText(valueRange);

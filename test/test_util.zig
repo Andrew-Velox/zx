@@ -60,7 +60,7 @@ pub const TestFileCache = struct {
         "component/multiple",
         "component/nested",
         "component/children_only",
-        "component/csr_react",
+        "component/react",
         "component/csr_react_multiple",
         "component/csr_zig",
         "component/import",

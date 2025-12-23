@@ -54,7 +54,7 @@ export type PreparedComponent = {
      * @example
      * ```tsx
      * // In ZX file:
-     * <MyComponent @rendering={.csr}>
+     * <MyComponent @rendering={.react}>
      *   <p>Child content</p>
      * </MyComponent>
      * 

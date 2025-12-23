@@ -12,7 +12,7 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
             <a href="https://ziex.dev" target="_blank">See ZX Docs →</a>
             <br/>
             <div style="height: 150px; margin: 10px;">
-                <CounterComponent @rendering={.csr} counter={counter} />
+                <CounterComponent @rendering={.react} counter={counter} />
             </div>
             <h4>ZX + React</h4>
             <hr/>

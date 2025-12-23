@@ -8,14 +8,14 @@ const NodeKind = Parse.NodeKind;
 
 pub const ClientComponentMetadata = struct {
     pub const Type = enum {
-        csr, // Client-side React.js
-        csz, // Client-side Zig
+        react, // Client-side React.js
+        client, // Client-side Zig
         pub fn from(value: []const u8) Type {
             const v = if (std.mem.startsWith(u8, value, ".")) value[1..value.len] else value;
 
             return std.meta.stringToEnum(Type, v) orelse {
                 std.debug.print("Invalid rendering type: {s}\n", .{value});
-                return .csz;
+                return .client;
             };
         }
     };
@@ -839,9 +839,9 @@ pub fn transpileFullElement(self: *Ast, node: ts.Node, ctx: *TranspileContext, i
     try writeHtmlElement(self, node, tag, attributes.items, children.items, ctx, preserve_whitespace);
 }
 
-/// Write a custom component: _zx.cmp(Component, .{ .prop = value }) or _zx.client(...) for CSR/CSZ
+/// Write a custom component: _zx.cmp(Component, .{ .prop = value }) or _zx.client(...) for CSR/Client
 fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: []const ZxAttribute, children: []const ts.Node, ctx: *TranspileContext) error{OutOfMemory}!void {
-    // Check if this is a client-side rendered component (@rendering={.csr} or @rendering={.csz})
+    // Check if this is a client-side rendered component (@rendering={.react} or @rendering={.client})
     var rendering_value: ?[]const u8 = null;
     for (attributes) |attr| {
         if (attr.is_builtin and std.mem.eql(u8, attr.name, "@rendering")) {
@@ -850,10 +850,10 @@ fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: 
         }
     }
 
-    const is_csr = if (rendering_value) |rv| std.mem.eql(u8, rv, ".csr") else false;
-    const is_csz = if (rendering_value) |rv| std.mem.eql(u8, rv, ".csz") else false;
+    const is_csr = if (rendering_value) |rv| std.mem.eql(u8, rv, ".react") else false;
+    const is_client = if (rendering_value) |rv| std.mem.eql(u8, rv, ".client") else false;
 
-    if (is_csr or is_csz) {
+    if (is_csr or is_client) {
         var path_buf: [512]u8 = undefined;
         var full_path: []const u8 = undefined;
 
@@ -910,7 +910,7 @@ fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: 
                 }
             }
         } else {
-            // CSZ: use file path with .zig extension (relative to cwd)
+            // Client: use file path with .zig extension (relative to cwd)
             if (ctx.file_path) |fp| {
                 // Replace .zx extension with .zig
                 if (std.mem.endsWith(u8, fp, ".zx")) {
@@ -932,7 +932,7 @@ fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: 
         }
 
         // Add to client components list (use current list length as stable index)
-        const rendering_type = ClientComponentMetadata.Type.from(rendering_value orelse "csz");
+        const rendering_type = ClientComponentMetadata.Type.from(rendering_value orelse "client");
         const component_index = ctx.client_components.items.len;
         const client_cmp = try ClientComponentMetadata.init(ctx.allocator, tag, full_path, rendering_type, component_index);
         try ctx.client_components.append(ctx.allocator, client_cmp);

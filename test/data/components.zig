@@ -1,6 +1,5 @@
-pub const components = [_]zx.Client.ComponentMeta{
-.{
-    .type = .csz,
+pub const components = [_]zx.Client.ComponentMeta{.{
+    .type = .client,
     .id = "zx-2676a2f99c98f8f91dd890d002af04ba-0",
     .name = "CounterComponent",
     .path = "component/csr_zig.zig",

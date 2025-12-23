@@ -1,6 +1,5 @@
-pub const components = [_]ComponentMetadata{
-.{
-    .type = .csz,
+pub const components = [_]ComponentMetadata{.{
+    .type = .client,
     .id = "zx-3badae80b344e955a3048888ed2aae42",
     .name = "CounterComponent",
     .path = "component/csr_zig.zig",

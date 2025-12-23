@@ -1,6 +1,6 @@
 pub const components = [_]zx.BOM.ComponentMetadata{
     .{
-        .type = .csz,
+        .type = .client,
         .id = "zx-3badae80b344e955a3048888ed2aae42",
         .name = "CounterComponent",
         .path = "component/csr_zig.zig",

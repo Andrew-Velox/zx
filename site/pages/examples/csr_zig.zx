@@ -4,7 +4,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
 
     return (
         <main @allocator={allocator}>
-            <ClientCounterComponent @rendering={.csz} count={server_count} />
+            <ClientCounterComponent @rendering={.client} count={server_count} />
         </main>
     );
 }

@@ -301,8 +301,8 @@ test "component_children_only" {
 }
 test "component_csr_react" {
     // if (true) return error.Todo;
-    try test_transpile("component/csr_react");
-    try test_render("component/csr_react", @import("./../data/component/csr_react.zig").Page);
+    try test_transpile("component/react");
+    try test_render("component/react", @import("./../data/component/react.zig").Page);
 }
 test "component_csr_react_multiple" {
     // if (true) return error.Todo;
@@ -395,7 +395,7 @@ fn test_transpile_inner(comptime file_path: []const u8, comptime no_expect: bool
     const source_z = try allocator.dupeZ(u8, source);
     defer allocator.free(source_z);
 
-    // Parse and transpile with file path for CSZ support
+    // Parse and transpile with file path for Client support
     var result = try zx.Ast.parse(allocator, source_z, .{ .path = full_file_path, .version = .new });
     defer result.deinit(allocator);
 
@@ -482,7 +482,7 @@ fn getPageFn(comptime path: []const u8) ?fn (std.mem.Allocator) zx.Component {
         .{ "component/multiple", @import("./../data/component/multiple.zig") },
         .{ "component/nested", @import("./../data/component/nested.zig") },
         .{ "component/children_only", @import("./../data/component/children_only.zig") },
-        .{ "component/csr_react", @import("./../data/component/csr_react.zig") },
+        .{ "component/react", @import("./../data/component/react.zig") },
         .{ "component/csr_react_multiple", @import("./../data/component/csr_react_multiple.zig") },
         .{ "component/csr_zig", @import("./../data/component/csr_zig.zig") },
         .{ "component/import", @import("./../data/component/import.zig") },

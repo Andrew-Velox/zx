@@ -98,9 +98,9 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
 
     // CSR example
     var aw_csr: std.io.Writer.Allocating = .init(allocator);
-    const zx_example_csr = @embedFile("../../../pages/examples/csr.zx");
-    const zig_example_csr = @embedFile("../examples/csr.zig");
-    const html_page_csr = @import("../examples/csr.zig").Page(allocator);
+    const zx_example_csr = @embedFile("../../../pages/examples/react.zx");
+    const zig_example_csr = @embedFile("../examples/react.zig");
+    const html_page_csr = @import("../examples/react.zig").Page(allocator);
     html_page_csr.render(&aw_csr.writer) catch unreachable;
     const html_example_csr = allocator.dupe(u8, aw_csr.written()) catch unreachable;
 
@@ -249,10 +249,10 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
                 <p>The <code>@rendering</code> attribute enables client-side rendering for interactive components.</p>
                 <p><strong>Values:</strong></p>
                 <ul>
-                    <li><code>.csr</code> - Client-side render with React (for imported React/TSX components)</li>
-                    <li><code>.csz</code> - Client-side render with Zig (compile component to WebAssembly)</li>
+                    <li><code>.react</code> - Client-side render with React (for imported React/TSX components)</li>
+                    <li><code>.client</code> - Client-side render with Zig (compile component to WebAssembly)</li>
                 </ul>
-                <ExampleBlock id="csr" zx_code={zx_example_csr} zig_code={zig_example_csr} html_code={html_example_csr} />
+                <ExampleBlock id="react" zx_code={zx_example_csr} zig_code={zig_example_csr} html_code={html_example_csr} />
             </section>
             <section id="importing" class="section">
                 <h2>Importing</h2>

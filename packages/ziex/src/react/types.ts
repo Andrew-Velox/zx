@@ -2,14 +2,14 @@
  * Metadata for a client-side component used within a ZX file.
  * 
  * This type represents the metadata for components that are marked with the `@rendering` attribute
- * in ZX files. When a component is declared with `@rendering={.csr}` or `@rendering={.csz}` in a
+ * in ZX files. When a component is declared with `@rendering={.react}` or `@rendering={.client}` in a
  * `.zx` file, the ZX transpiler generates a `ComponentMetadata` entry that is included in the
  * generated `components` array.
  * 
  * @example
  * ```tsx
  * // In a ZX file (page.zx):
- * <CounterComponent @rendering={.csr} max_count={10} />
+ * <CounterComponent @rendering={.react} max_count={10} />
  * 
  * // Generated components array (components.ts):
  * export const components: ComponentMetadata[] = [
@@ -17,7 +17,7 @@
  *     name: "CounterComponent",
  *     path: "./components/CounterComponent.tsx",
  *     id: "zx-dcde04c415da9d1b15ca2690d8b497ae",
- *     type: "csr",
+ *     type: "react",
  *     import: () => import('./components/CounterComponent.tsx')
  *   }
  * ];
@@ -44,7 +44,7 @@ export type ComponentMetadata = {
    * @example
    * ```tsx
    * // In ZX file:
-   * <CounterComponent @rendering={.csr} />
+   * <CounterComponent @rendering={.react} />
    * 
    * // name will be: "CounterComponent"
    * ```
@@ -55,7 +55,7 @@ export type ComponentMetadata = {
    * The file path to the component module.
    * 
    * This is the relative or absolute path to the component file that will be dynamically imported
-   * at runtime. For CSR components, this typically points to a `.tsx` or `.jsx` file. For CSZ
+   * at runtime. For CSR components, this typically points to a `.tsx` or `.jsx` file. For Client
    * components, this points to a Zig component file.
    * 
    * The path is determined from the `@jsImport` directive in the ZX file, or defaults to
@@ -65,7 +65,7 @@ export type ComponentMetadata = {
    * ```tsx
    * // In ZX file:
    * const CounterComponent = @jsImport("components/Counter.tsx");
-   * <CounterComponent @rendering={.csr} />
+   * <CounterComponent @rendering={.react} />
    * 
    * // path will be: "components/Counter.tsx"
    * ```
@@ -73,7 +73,7 @@ export type ComponentMetadata = {
    * @example
    * ```tsx
    * // Without explicit @jsImport:
-   * <MyComponent @rendering={.csr} />
+   * <MyComponent @rendering={.react} />
    * 
    * // path will default to: "./MyComponent.tsx"
    * ```
@@ -122,21 +122,21 @@ export type ComponentMetadata = {
   /**
    * The rendering type of the component, determining how it will be rendered on the client.
    * 
-   * - **"csr"** (Client Side React): The component is a React component that will be rendered
+   * - **"react"** (Client Side React): The component is a React component that will be rendered
    *   using React's client-side rendering. The component file should export a default React
    *   component function. This is the most common type for interactive UI components.
    * 
-   * - **"csz"** (Client Side Zig): The component is a Zig component that will be compiled to
+   * - **"client"** (Client Side Zig): The component is a Zig component that will be compiled to
    *   WebAssembly and rendered on the client side. This allows you to use Zig's performance
    *   and type safety for client-side components.
    * 
-   * The type is determined by the `@rendering` attribute value in the ZX file (`.csr` or `.csz`).
+   * The type is determined by the `@rendering` attribute value in the ZX file (`.react` or `.client`).
    * 
    * @example
    * ```tsx
    * // CSR component (React):
-   * <CounterComponent @rendering={.csr} max_count={10} />
-   * // type: "csr"
+   * <CounterComponent @rendering={.react} max_count={10} />
+   * // type: "react"
    * 
    * // Component file (CounterComponent.tsx):
    * export default function CounterComponent({ max_count }: { max_count: number }) {
@@ -146,9 +146,9 @@ export type ComponentMetadata = {
    * 
    * @example
    * ```tsx
-   * // CSZ component (Zig/WASM):
-   * <CounterComponent @rendering={.csz} />
-   * // type: "csz"
+   * // Client component (Zig/WASM):
+   * <CounterComponent @rendering={.client} />
+   * // type: "client"
    * 
    * // Component file (CounterComponent.zig):
    * pub fn CounterComponent(allocator: zx.Allocator) zx.Component {
@@ -156,7 +156,7 @@ export type ComponentMetadata = {
    * }
    * ```
    */
-  type: "csr" | "csz";
+  type: "react" | "client";
   
   /**
    * A lazy-loading function that dynamically imports the component module.
@@ -166,7 +166,7 @@ export type ComponentMetadata = {
    * by only loading components when they are needed.
    * 
    * For CSR components, the imported module should export a default React component.
-   * For CSZ components, the import mechanism depends on the WASM module structure.
+   * For Client components, the import mechanism depends on the WASM module structure.
    * 
    * The function is called during client-side hydration to load and render the component
    * into its corresponding DOM container element.

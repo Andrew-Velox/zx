@@ -495,24 +495,24 @@ fn genClientMainWasm(allocator: std.mem.Allocator, components: []const ClientCom
         allocator.free(old_zon_str);
     }
 
-    const cmps_csz = @embedFile("./transpile/template/components.zig");
+    const cmps_client = @embedFile("./transpile/template/components.zig");
     const placeholder = "    // PLACEHOLDER_ZX_COMPONENTS\n";
-    const placeholder_index = std.mem.indexOf(u8, cmps_csz, placeholder) orelse {
+    const placeholder_index = std.mem.indexOf(u8, cmps_client, placeholder) orelse {
         @panic("Placeholder PLACEHOLDER_ZX_COMPONENTS not found in components.zig");
     };
 
-    const before = cmps_csz[0..placeholder_index];
-    const after = cmps_csz[placeholder_index + placeholder.len ..];
+    const before = cmps_client[0..placeholder_index];
+    const after = cmps_client[placeholder_index + placeholder.len ..];
 
-    const cmps_csz_z = try std.mem.concat(allocator, u8, &.{ before, zon_str[2..(zon_str.len - 1)], after });
-    defer allocator.free(cmps_csz_z);
+    const cmps_client_z = try std.mem.concat(allocator, u8, &.{ before, zon_str[2..(zon_str.len - 1)], after });
+    defer allocator.free(cmps_client_z);
 
-    const cmps_csz_path = try std.fs.path.join(allocator, &.{ output_dir, "components.zig" });
-    defer allocator.free(cmps_csz_path);
+    const cmps_client_path = try std.fs.path.join(allocator, &.{ output_dir, "components.zig" });
+    defer allocator.free(cmps_client_path);
 
     try std.fs.cwd().writeFile(.{
-        .sub_path = cmps_csz_path,
-        .data = cmps_csz_z,
+        .sub_path = cmps_client_path,
+        .data = cmps_client_z,
     });
 }
 
@@ -881,8 +881,8 @@ fn transpileFile(
         var cloned_import: []const u8 = undefined;
         var cloned_route: []const u8 = undefined;
 
-        if (component.type == .csz) {
-            // For .csz components, use the output .zig file path (relative to output_dir)
+        if (component.type == .client) {
+            // For .client components, use the output .zig file path (relative to output_dir)
             const output_rel_to_dir = try relativePath(allocator, output_dir, output_path);
             defer allocator.free(output_rel_to_dir);
 
@@ -898,7 +898,7 @@ fn transpileFile(
             const import_str = try std.fmt.allocPrint(allocator, "@@import(@@{s}@@).{s}@", .{ clean_path, component.name });
             cloned_import = import_str;
         } else {
-            // For .csr components, use the original component path logic
+            // For .react components, use the original component path logic
             const source_dir = std.fs.path.dirname(source_path) orelse ".";
             const resolved_component_path = try resolvePath(allocator, source_dir, component.path);
             defer allocator.free(resolved_component_path);
@@ -1120,14 +1120,14 @@ fn transpileCommand(
     // Filter components by type and generate appropriate files
     var csr_components = std.array_list.Managed(ClientComponentSerializable).init(allocator);
     defer csr_components.deinit();
-    var csz_components = std.array_list.Managed(ClientComponentSerializable).init(allocator);
-    defer csz_components.deinit();
+    var zig_client_components = std.array_list.Managed(ClientComponentSerializable).init(allocator);
+    defer zig_client_components.deinit();
 
     for (client_components.items) |component| {
-        if (component.type == .csr) {
+        if (component.type == .react) {
             try csr_components.append(component);
-        } else if (component.type == .csz) {
-            try csz_components.append(component);
+        } else if (component.type == .client) {
+            try zig_client_components.append(component);
         }
     }
 
@@ -1137,9 +1137,9 @@ fn transpileCommand(
         };
     }
 
-    // if (csz_components.items.len > 0) {
+    // if (client_components.items.len > 0) {
     // Always generate components.zig
-    genClientMainWasm(allocator, csz_components.items, output_dir, verbose) catch |err| {
+    genClientMainWasm(allocator, zig_client_components.items, output_dir, verbose) catch |err| {
         std.debug.print("Warning: Failed to generate main_wasm.zig: {}\n", .{err});
     };
     // }

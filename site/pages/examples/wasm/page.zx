@@ -3,7 +3,7 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
     return (
         <div @allocator={allocator} class="todo-container">
           
-            <TodoApp @rendering={.csz} />
+            <TodoApp @rendering={.client} />
 
             <style>
                 {[@embedFile("style.css"):s]}
