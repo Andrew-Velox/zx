@@ -10,9 +10,16 @@ pub fn Layout(ctx: zx.LayoutContext, children: zx.Component) zx.Component {
                     <div class="top-bar-left">
                         <a href="/" class="top-bar-logo">ZX</a>
                     </div>
+                    <input type="checkbox" id="top-bar-toggle" class="top-bar-toggle" />
+                    <label for="top-bar-toggle" class="top-bar-hamburger" aria-label="Toggle menu">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </label>
                     <div class="top-bar-right">
                         <nav class="top-bar-nav">
-                            <a href="/docs" class="top-bar-link">Docs</a>
+                            <a href="/learn" class="top-bar-link">Learn</a>
+                            <a href="/docs" class="top-bar-link"><span class="top-bar-link-full">Reference</span><span class="top-bar-link-short">Ref</span></a>
                             <a href="/examples" class="top-bar-link">Examples</a>
                             <a href="/cli" class="top-bar-link">CLI</a>
                         </nav>

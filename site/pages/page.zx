@@ -40,16 +40,22 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
             <nav class="nav">
                 <div class="nav-content">
                     <a href="/" class="nav-logo">ZX</a>
+                    <input type="checkbox" id="nav-toggle" class="nav-toggle" />
+                    <label for="nav-toggle" class="nav-hamburger" aria-label="Toggle menu">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </label>
                     <div class="nav-right">
                         <ul class="nav-links">
                             <li><a href="/learn" class="nav-link">Learn</a></li>
-                            <li><a href="/docs" class="nav-link">Reference</a></li>
+                            <li><a href="/docs" class="nav-link"><span class="nav-link-full">Reference</span><span class="nav-link-short">Ref</span></a></li>
                             <li><a href="/examples" class="nav-link">Examples</a></li>
                             <li><a href="/cli" class="nav-link">CLI</a></li>
                         </ul>
                         <a href="https://github.com/nurulhudaapon/zx" target="_blank" rel="noopener noreferrer" class="nav-github" aria-label="GitHub">
                             <GitHubIcon allocator={allocator} />
-                            <span>GitHub</span>
+                            <span class="nav-github-text">GitHub</span>
                         </a>
                     </div>
                 </div>

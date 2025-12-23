@@ -399,6 +399,166 @@ body {
     color: var(--zx-primary);
 }
 
+/* Nav label variants - short labels hidden by default */
+.nav-link-short {
+    display: none;
+}
+
+.nav-link-full {
+    display: inline;
+}
+
+/* Hamburger Menu - Hidden on desktop */
+.nav-toggle {
+    display: none;
+}
+
+.nav-hamburger {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    z-index: 1001;
+}
+
+.nav-hamburger span {
+    display: block;
+    width: 100%;
+    height: 2px;
+    background: var(--zx-white);
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+/* Compact Navigation - First fallback */
+@media (max-width: 768px) {
+    .nav-link-short {
+        display: inline;
+    }
+
+    .nav-link-full {
+        display: none;
+    }
+
+    .nav-github-text {
+        display: none;
+    }
+
+    .nav-github {
+        padding: 0.5rem;
+    }
+
+    .nav-right {
+        gap: 1.25rem;
+    }
+
+    .nav-links {
+        gap: 1.25rem;
+    }
+
+    .nav-link {
+        font-size: 0.875rem;
+    }
+}
+
+/* Hamburger Navigation - Second fallback */
+@media (max-width: 360px) {
+    .nav-hamburger {
+        display: flex;
+        order: 3;
+    }
+
+    .nav-content {
+        position: relative;
+    }
+
+    .nav-right {
+        position: fixed;
+        top: 0;
+        right: -100%;
+        width: 280px;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.98);
+        backdrop-filter: blur(20px);
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 5rem 2rem 2rem;
+        gap: 2rem;
+        transition: right 0.3s ease;
+        border-left: 1px solid var(--zx-border);
+    }
+
+    .nav-toggle:checked ~ .nav-right {
+        right: 0;
+    }
+
+    .nav-links {
+        flex-direction: column;
+        gap: 1.5rem;
+        width: 100%;
+    }
+
+    .nav-links li {
+        width: 100%;
+    }
+
+    .nav-link {
+        display: block;
+        font-size: 1.125rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--zx-border);
+    }
+
+    /* Show full labels in hamburger menu */
+    .nav-link-short {
+        display: none;
+    }
+
+    .nav-link-full {
+        display: inline;
+    }
+
+    /* Show GitHub text in hamburger menu */
+    .nav-github-text {
+        display: inline;
+    }
+
+    .nav-github {
+        width: 100%;
+        justify-content: center;
+        margin-top: 1rem;
+        padding: 0.5rem 1rem;
+    }
+
+    /* Hamburger animation when open */
+    .nav-toggle:checked ~ .nav-hamburger span:nth-child(1) {
+        transform: rotate(45deg) translate(5px, 5px);
+    }
+
+    .nav-toggle:checked ~ .nav-hamburger span:nth-child(2) {
+        opacity: 0;
+    }
+
+    .nav-toggle:checked ~ .nav-hamburger span:nth-child(3) {
+        transform: rotate(-45deg) translate(5px, -5px);
+    }
+
+    /* Overlay when menu is open */
+    .nav-toggle:checked ~ .nav-right::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: -1;
+    }
+}
+
 /* Features Section */
 .features {
     padding: 6rem 2rem;
@@ -858,11 +1018,6 @@ body {
     
     .nav {
         padding: 1rem;
-    }
-    
-    .nav-links {
-        gap: 1rem;
-        font-size: 0.875rem;
     }
     
     .features-grid,
