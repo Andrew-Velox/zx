@@ -1295,9 +1295,10 @@ pub fn transpileFormat(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void 
 }
 
 pub fn transpileIf(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
-    // if_expression: 'if' '(' condition ')' [payload] then_expr ['else' else_expr]
+    // if_expression: 'if' '(' condition ')' [payload] then_expr ['else' [else_payload] else_expr]
     var condition_text: ?[]const u8 = null;
     var payload_text: ?[]const u8 = null;
+    var else_payload_text: ?[]const u8 = null;
     var then_node: ?ts.Node = null;
     var else_node: ?ts.Node = null;
 
@@ -1305,6 +1306,7 @@ pub fn transpileIf(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
     var i: u32 = 0;
     var in_condition = false;
     var in_then = false;
+    var in_else = false;
 
     while (i < child_count) : (i += 1) {
         const child = node.child(i) orelse continue;
@@ -1320,6 +1322,7 @@ pub fn transpileIf(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
             in_then = true;
         } else if (std.mem.eql(u8, child_type, "else")) {
             in_then = false;
+            in_else = true;
         } else if (in_condition and condition_text == null) {
             condition_text = try self.getNodeText(child);
         } else if (in_then and child_kind == .payload) {
@@ -1327,7 +1330,10 @@ pub fn transpileIf(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
             payload_text = try self.getNodeText(child);
         } else if (in_then and then_node == null) {
             then_node = child;
-        } else if (!in_condition and !in_then and then_node != null) {
+        } else if (in_else and child_kind == .payload) {
+            // Capture else payload like |err|
+            else_payload_text = try self.getNodeText(child);
+        } else if (in_else and else_node == null) {
             else_node = child;
         }
     }
@@ -1361,6 +1367,11 @@ pub fn transpileIf(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
     // Handle else branch
     if (else_node) |else_n| {
         try ctx.write(" else ");
+        // Write else payload if present (e.g., |err|)
+        if (else_payload_text) |else_payload| {
+            try ctx.write(else_payload);
+            try ctx.write(" ");
+        }
         try transpileBranch(self, else_n, ctx);
     } else {
         try ctx.write(" else _zx.ele(.fragment, .{})");

@@ -855,7 +855,7 @@ fn renderExpressionBlock(
     }
 }
 
-/// Render if expression: {if (cond) |payload| (<then>) else (<else>)}
+/// Render if expression: {if (cond) |payload| (<then>) else |else_payload| (<else>)}
 /// Supports payload captures and else-if chains
 fn renderIfExpression(
     self: *Ast,
@@ -865,6 +865,7 @@ fn renderIfExpression(
 ) anyerror!void {
     var condition_node: ?ts.Node = null;
     var payload_node: ?ts.Node = null;
+    var else_payload_node: ?ts.Node = null;
     var then_node: ?ts.Node = null;
     var else_node: ?ts.Node = null;
     var last_token_before_then: ?ts.Node = null;
@@ -872,6 +873,7 @@ fn renderIfExpression(
     const child_count = node.childCount();
     var in_condition = false;
     var in_then = false;
+    var in_else = false;
 
     var i: u32 = 0;
     while (i < child_count) : (i += 1) {
@@ -889,6 +891,7 @@ fn renderIfExpression(
             last_token_before_then = child;
         } else if (std.mem.eql(u8, child_type, "else")) {
             in_then = false;
+            in_else = true;
         } else if (in_condition and condition_node == null) {
             condition_node = child;
         } else if (in_then and child_kind == .payload) {
@@ -897,7 +900,10 @@ fn renderIfExpression(
             last_token_before_then = child;
         } else if (in_then and then_node == null) {
             then_node = child;
-        } else if (!in_condition and !in_then and then_node != null) {
+        } else if (in_else and child_kind == .payload) {
+            // Capture else payload like |err|
+            else_payload_node = child;
+        } else if (in_else and else_node == null) {
             else_node = child;
         }
     }
@@ -956,6 +962,12 @@ fn renderIfExpression(
             try w.writeAll("else ");
         } else {
             try w.writeAll(" else ");
+        }
+        // Else payload (e.g., |err|)
+        if (else_payload_node) |else_payload| {
+            const else_payload_text = try self.getNodeText(else_payload);
+            try w.writeAll(else_payload_text);
+            try w.writeAll(" ");
         }
         try renderBranchWithMultiline(self, else_b, w, ctx, is_multiline);
     }
@@ -1022,12 +1034,14 @@ fn renderIfExpressionInnerWithMultiline(
 ) anyerror!void {
     var condition_node: ?ts.Node = null;
     var payload_node: ?ts.Node = null;
+    var else_payload_node: ?ts.Node = null;
     var then_node: ?ts.Node = null;
     var else_node: ?ts.Node = null;
 
     const child_count = node.childCount();
     var in_condition = false;
     var in_then = false;
+    var in_else = false;
 
     var i: u32 = 0;
     while (i < child_count) : (i += 1) {
@@ -1044,13 +1058,17 @@ fn renderIfExpressionInnerWithMultiline(
             in_then = true;
         } else if (std.mem.eql(u8, child_type, "else")) {
             in_then = false;
+            in_else = true;
         } else if (in_condition and condition_node == null) {
             condition_node = child;
         } else if (in_then and child_kind == .payload) {
             payload_node = child;
         } else if (in_then and then_node == null) {
             then_node = child;
-        } else if (!in_condition and !in_then and then_node != null) {
+        } else if (in_else and child_kind == .payload) {
+            // Capture else payload like |err|
+            else_payload_node = child;
+        } else if (in_else and else_node == null) {
             else_node = child;
         }
     }
@@ -1092,6 +1110,12 @@ fn renderIfExpressionInnerWithMultiline(
             try w.writeAll("else ");
         } else {
             try w.writeAll(" else ");
+        }
+        // Else payload (e.g., |err|)
+        if (else_payload_node) |else_payload| {
+            const else_payload_text = try self.getNodeText(else_payload);
+            try w.writeAll(else_payload_text);
+            try w.writeAll(" ");
         }
         try renderBranchWithMultiline(self, else_b, w, ctx, force_multiline);
     }
@@ -1474,6 +1498,7 @@ fn detectIfMultiline(self: *Ast, node: ts.Node) bool {
     const child_count = node.childCount();
     var in_condition = false;
     var in_then = false;
+    var in_else = false;
 
     var i: u32 = 0;
     while (i < child_count) : (i += 1) {
@@ -1491,10 +1516,13 @@ fn detectIfMultiline(self: *Ast, node: ts.Node) bool {
             last_token_before_then = child;
         } else if (std.mem.eql(u8, child_type, "else")) {
             in_then = false;
+            in_else = true;
         } else if (in_then and child_kind == .payload) {
             last_token_before_then = child;
         } else if (in_then and then_node == null) {
             then_node = child;
+        } else if (in_else and child_kind == .payload) {
+            // Skip else payload, it doesn't affect multiline detection
         }
     }
 

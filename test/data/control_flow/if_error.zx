@@ -1,0 +1,25 @@
+pub fn Page(allocator: zx.Allocator) zx.Component {
+    const user = "John Doe";
+    const user_empty = "";
+
+    return (
+        <main @allocator={allocator}>
+            {if (try_get_user(user)) |u| (
+                <p>Welcome, {u}!</p>
+            ) else |err| (
+                <p>Error: {@errorName(err)}</p>
+            )}
+            {if (try_get_user(user_empty)) |u| (
+                <p>Welcome, {u}!</p>
+            ) else |err| (
+                <p>Error: {@errorName(err)}</p>
+            )}
+        </main>
+    );
+}
+
+fn try_get_user(user: []const u8) error{UserNotFound}![]const u8 {
+    return if (user.len > 0) user else error.UserNotFound;
+}
+
+const zx = @import("zx");

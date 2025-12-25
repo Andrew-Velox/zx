@@ -20,6 +20,9 @@ test "tests:afterAll" {
 test "if" {
     try test_fmt("control_flow/if");
 }
+test "if_error" {
+    try test_fmt("control_flow/if_error");
+}
 test "if_block" {
     try test_fmt("control_flow/if_block");
 }

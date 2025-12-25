@@ -21,6 +21,10 @@ test "if" {
     try test_transpile("control_flow/if");
     try test_render("control_flow/if", @import("./../data/control_flow/if.zig").Page);
 }
+test "if_error" {
+    try test_transpile("control_flow/if_error");
+    try test_render("control_flow/if_error", @import("./../data/control_flow/if_error.zig").Page);
+}
 test "if_block" {
     try test_transpile("control_flow/if_block");
     try test_render("control_flow/if_block", @import("./../data/control_flow/if_block.zig").Page);
@@ -457,6 +461,7 @@ fn getPageFn(comptime path: []const u8) ?fn (std.mem.Allocator) zx.Component {
         .{ "control_flow/if_if_only_block", @import("./../data/control_flow/if_if_only_block.zig") },
         .{ "control_flow/if_else_if", @import("./../data/control_flow/if_else_if.zig") },
         .{ "control_flow/if_capture", @import("./../data/control_flow/if_capture.zig") },
+        .{ "control_flow/if_error", @import("./../data/control_flow/if_error.zig") },
         .{ "control_flow/for_if", @import("./../data/control_flow/for_if.zig") },
         .{ "control_flow/for_for", @import("./../data/control_flow/for_for.zig") },
         .{ "control_flow/for_switch", @import("./../data/control_flow/for_switch.zig") },

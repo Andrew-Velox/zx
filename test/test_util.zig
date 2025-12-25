@@ -4,6 +4,7 @@ pub const TestFileCache = struct {
     pub const test_files = [_][]const u8{
         // Control Flow
         "control_flow/if",
+        "control_flow/if_error",
         "control_flow/if_block",
 
         "control_flow/if_only",
