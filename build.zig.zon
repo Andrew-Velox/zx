@@ -16,23 +16,11 @@
         //     .url = "git+https://github.com/nurulhudaapon/lspz.git?ref=0.15.x#ce6c8f02c78e622421cfc2405c67c5222819ec03",
         //     .hash = "zls-0.15.0-rmm5fkjqIwDZpmDHyKwxa9K2gcI3FPaGVFPwjYWFBM5B",
         // },
-        // ZX CLI - Command Line Interface for ZX
-        .zli = .{
-            .url = "git+https://github.com/nurulhudaapon/cliz.git#aff3b54879e7514afaf8c87f1abe22121b8992d4",
-            .hash = "zli-4.3.0-LeUjpu_fAABOSVASSCW2fFh8SFVNHrxQGDXGPNzcSE_i",
-        },
-        .zig_js = .{
-            .path = "vendor/jsz",
-        },
-        .tree_sitter_zx = .{
-            .path = "packages/tree-sitter-zx",
-        },
-        .tree_sitter = .{
-            .path = "vendor/zig-tree-sitter",
-        },
-        .cachez = .{
-            .path = "vendor/cachez",
-        },
+        .zli = .{ .path = "vendor/cliz" },
+        .zig_js = .{ .path = "vendor/jsz" },
+        .tree_sitter = .{ .path = "vendor/zig-tree-sitter" },
+        .tree_sitter_zx = .{ .path = "packages/tree-sitter-zx" },
+        .cachez = .{ .path = "vendor/cachez" },
     },
     .paths = .{
         "build.zig",
@@ -40,6 +28,7 @@
         "src",
         "packages/tree-sitter-zx",
         "vendor/cachez",
+        "vendor/cliz",
         "vendor/jsz",
         "vendor/zig-tree-sitter",
     },
