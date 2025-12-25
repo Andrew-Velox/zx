@@ -28,16 +28,18 @@ pub fn init(b: *std.Build, exe: *std.Build.Step.Compile, options: ZxInitOptions)
 
     if (options.cli) |cli_opts| {
         opts.cli_path = cli_opts.path;
+
+        if (cli_opts.steps) |cli_steps| {
+            opts.steps = cli_steps;
+        }
     }
 
     if (options.experimental) |experimental_opts| {
         opts.experimental_enabled_csr = experimental_opts.enabled_csr;
     }
 
-    if (options.cli) |cli_opts| {
-        if (cli_opts.steps) |cli_steps| {
-            opts.steps = cli_steps;
-        }
+    if (options.plugins) |plugins| {
+        opts.plugins = plugins;
     }
 
     return initInner(b, exe, zx_exe, zx_module, zx_wasm_module, opts);
@@ -199,36 +201,45 @@ pub fn initInner(
     }
 
     // --- Plugins --- //
-    for (opts.plugins) |plugin| {
-        for (plugin.steps) |step| {
-            switch (step) {
-                .command => |command| {
-                    if (command.args.len == 0) @panic("Command must have at least one argument");
-                    const main_arg = command.args[0];
-                    const args = command.args[1..];
-                    const sys_cmd = b.addSystemCommand(&.{main_arg});
+    for (opts.plugins) |*plugin| {
+        for (plugin.steps) |*step| {
+            switch (step.*) {
+                .command => {
+                    const run = step.command.run;
 
-                    for (args) |arg| {
-                        const outdir_placeholder = "{outdir}";
-                        if (std.mem.startsWith(u8, arg, outdir_placeholder)) {
-                            const outdir_path = if (outdir_placeholder.len == arg.len)
-                                ""
-                            else
-                                arg[(outdir_placeholder.len + 1)..];
+                    for (run.argv.items) |*arg| {
+                        switch (arg.*) {
+                            .lazy_path => |path| {
+                                // if path starts with placeholder, replace with the actual location
+                                const outdir_placeholder = "{outdir}";
 
-                            std.debug.print("Outdir path: {s}\n", .{transpile_outdir.path(b, outdir_path).getPath(b)});
-                            sys_cmd.addFileArg(transpile_outdir.path(b, outdir_path));
-                        } else {
-                            sys_cmd.addArg(arg);
+                                const template = path.lazy_path.getPath3(b, null).sub_path;
+
+                                if (std.mem.startsWith(u8, template, outdir_placeholder)) {
+                                    const sub_path = if (outdir_placeholder.len == template.len)
+                                        ""
+                                    else
+                                        template[outdir_placeholder.len + 1..];
+
+                                    const replaced = transpile_outdir.path(b, sub_path);
+
+                                    arg.* = .{
+                                        .lazy_path = .{
+                                            .prefix = "",
+                                            .lazy_path = replaced,
+                                        },
+                                    };
+                                }
+                            },
+                            else => {},
                         }
                     }
-                    switch (command.type) {
-                        .before_transpile => {
-                            transpile_cmd.step.dependOn(&sys_cmd.step);
-                        },
+
+                    switch (step.command.type) {
+                        .before_transpile => transpile_cmd.step.dependOn(&run.step),
                         .after_transpile => {
-                            sys_cmd.step.dependOn(&transpile_cmd.step);
-                            exe.step.dependOn(&sys_cmd.step);
+                            run.step.dependOn(&transpile_cmd.step);
+                            exe.step.dependOn(&run.step);
                         },
                     }
                 },
