@@ -302,6 +302,10 @@ pub fn renderNodeWithContext(
         .zx_expression_block => {
             try renderExpressionBlock(self, node, w, ctx);
         },
+        .zx_template_string => {
+            // Template strings are rendered as-is from source
+            try renderTemplateString(self, node, w);
+        },
         else => {
             try renderSourceWithChildren(self, node, w, ctx);
         },
@@ -765,6 +769,21 @@ fn renderText(
     if (has_trailing_ws) {
         try w.writeAll(" ");
     }
+}
+
+/// Render template string: `text {expr} more text`
+/// Template strings are rendered as-is from source, preserving their format
+fn renderTemplateString(
+    self: *Ast,
+    node: ts.Node,
+    w: *std.io.Writer,
+) !void {
+    const start_byte = node.startByte();
+    const end_byte = node.endByte();
+    if (start_byte >= end_byte or end_byte > self.source.len) return;
+
+    // Write the template string exactly as it appears in source
+    try w.writeAll(self.source[start_byte..end_byte]);
 }
 
 /// Check if a child node has meaningful (non-whitespace) content
