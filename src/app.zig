@@ -52,7 +52,7 @@ pub const App = struct {
 
         // Routes
         for (config.meta.routes) |*route|
-            router.get(route.path, Handler.page, .{ .data = route });
+            router.all(route.path, Handler.page, .{ .data = route });
 
         // Introspect the app, this will exit the program in some cases like --introspect flag
         try app.introspect();
