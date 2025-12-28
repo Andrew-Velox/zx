@@ -943,6 +943,151 @@ const ZxContext = struct {
         @compileError("attrs() expects a tuple of attributes");
     }
 
+    /// Spread a struct's fields as attributes
+    /// Takes a struct and returns a slice of attributes for each field
+    pub fn attrSpr(self: *ZxContext, props: anytype) []const ?Element.Attribute {
+        const allocator = self.getAlloc();
+        const T = @TypeOf(props);
+        const type_info = @typeInfo(T);
+
+        if (type_info != .@"struct") {
+            @compileError("attrSpr() expects a struct, got " ++ @typeName(T));
+        }
+
+        const fields = type_info.@"struct".fields;
+        if (fields.len == 0) return &.{};
+
+        const result = allocator.alloc(?Element.Attribute, fields.len) catch @panic("OOM");
+
+        inline for (fields, 0..) |field, i| {
+            const val = @field(props, field.name);
+            result[i] = self.attr(field.name, val);
+        }
+
+        return result;
+    }
+
+    /// Merge two structs for component props spreading
+    /// Later fields override earlier ones
+    pub fn propsM(_: *ZxContext, base: anytype, overrides: anytype) MergedPropsType(@TypeOf(base), @TypeOf(overrides)) {
+        const BaseType = @TypeOf(base);
+        const OverrideType = @TypeOf(overrides);
+        const ResultType = MergedPropsType(BaseType, OverrideType);
+
+        var result: ResultType = undefined;
+
+        // Copy all fields from base
+        const base_info = @typeInfo(BaseType);
+        if (base_info == .@"struct") {
+            inline for (base_info.@"struct".fields) |field| {
+                if (@hasField(ResultType, field.name)) {
+                    @field(result, field.name) = @field(base, field.name);
+                }
+            }
+        }
+
+        // Apply overrides (these take precedence)
+        const override_info = @typeInfo(OverrideType);
+        if (override_info == .@"struct") {
+            inline for (override_info.@"struct".fields) |field| {
+                @field(result, field.name) = @field(overrides, field.name);
+            }
+        }
+
+        return result;
+    }
+
+    /// Merge multiple attribute sources (including spread results) into a single slice
+    /// Accepts a tuple where each element can be:
+    /// - ?Element.Attribute (single attribute from attr())
+    /// - []const ?Element.Attribute (slice from attrSpr())
+    /// Later attributes with the same name override earlier ones (like JSX)
+    pub fn attrsM(self: *ZxContext, inputs: anytype) []const Element.Attribute {
+        const allocator = self.getAlloc();
+        const InputType = @TypeOf(inputs);
+        const input_info = @typeInfo(InputType);
+
+        if (input_info != .@"struct" or !input_info.@"struct".is_tuple) {
+            @compileError("attrsM() expects a tuple of attributes or attribute slices");
+        }
+
+        // First pass: collect all attributes in order
+        var count: usize = 0;
+        inline for (inputs) |input| {
+            const T = @TypeOf(input);
+            if (T == ?Element.Attribute) {
+                if (input != null) count += 1;
+            } else if (T == []const ?Element.Attribute) {
+                for (input) |maybe_attr| {
+                    if (maybe_attr != null) count += 1;
+                }
+            } else {
+                @compileError("attrsM() element must be ?Element.Attribute or []const ?Element.Attribute, got " ++ @typeName(T));
+            }
+        }
+
+        if (count == 0) return &.{};
+
+        // Collect all attributes in order (later ones override earlier)
+        const temp = allocator.alloc(Element.Attribute, count) catch @panic("OOM");
+        var idx: usize = 0;
+
+        inline for (inputs) |input| {
+            const T = @TypeOf(input);
+            if (T == ?Element.Attribute) {
+                if (input) |a| {
+                    temp[idx] = a;
+                    idx += 1;
+                }
+            } else if (T == []const ?Element.Attribute) {
+                for (input) |maybe_attr| {
+                    if (maybe_attr) |a| {
+                        temp[idx] = a;
+                        idx += 1;
+                    }
+                }
+            }
+        }
+
+        // Deduplicate atrrs, keep last occurrence
+        var unique_count: usize = 0;
+        var i: usize = temp.len;
+        while (i > 0) {
+            i -= 1;
+            const current = temp[i];
+            var found_later = false;
+            for (temp[i + 1 ..]) |later| {
+                if (std.mem.eql(u8, current.name, later.name)) {
+                    found_later = true;
+                    break;
+                }
+            }
+            if (!found_later) {
+                unique_count += 1;
+            }
+        }
+
+        const result = allocator.alloc(Element.Attribute, unique_count) catch @panic("OOM");
+        var result_idx: usize = 0;
+
+        for (temp, 0..) |current_attr, j| {
+            var found_later = false;
+            for (temp[j + 1 ..]) |later| {
+                if (std.mem.eql(u8, current_attr.name, later.name)) {
+                    found_later = true;
+                    break;
+                }
+            }
+            if (!found_later) {
+                result[result_idx] = current_attr;
+                result_idx += 1;
+            }
+        }
+
+        allocator.free(temp);
+        return result;
+    }
+
     pub fn cmp(self: *ZxContext, comptime func: anytype, props: anytype) Component {
         const allocator = self.getAlloc();
         const FuncInfo = @typeInfo(@TypeOf(func));
@@ -1009,6 +1154,85 @@ pub const PageOptions = struct {
 
 pub const PageContext = routing.PageContext;
 pub const LayoutContext = routing.LayoutContext;
+
+/// Compute the merged type of two structs for props spreading
+/// All fields from both structs are included in the result
+pub fn MergedPropsType(comptime BaseType: type, comptime OverrideType: type) type {
+    const base_info = @typeInfo(BaseType);
+    const override_info = @typeInfo(OverrideType);
+
+    if (base_info != .@"struct" or override_info != .@"struct") {
+        @compileError("MergedPropsType expects struct types");
+    }
+
+    const base_fields = base_info.@"struct".fields;
+    const override_fields = override_info.@"struct".fields;
+
+    // Count unique fields (override fields replace base fields with same name)
+    comptime var field_count = base_fields.len;
+    inline for (override_fields) |of| {
+        comptime var found = false;
+        inline for (base_fields) |bf| {
+            if (std.mem.eql(u8, bf.name, of.name)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) field_count += 1;
+    }
+
+    // Build the combined fields array
+    comptime var fields: [field_count]std.builtin.Type.StructField = undefined;
+    comptime var idx: usize = 0;
+
+    // Add base fields (unless overridden)
+    inline for (base_fields) |bf| {
+        comptime var overridden = false;
+        inline for (override_fields) |of| {
+            if (std.mem.eql(u8, bf.name, of.name)) {
+                overridden = true;
+                break;
+            }
+        }
+        if (overridden) {
+            // Use override field's type
+            inline for (override_fields) |of| {
+                if (std.mem.eql(u8, bf.name, of.name)) {
+                    fields[idx] = of;
+                    break;
+                }
+            }
+        } else {
+            fields[idx] = bf;
+        }
+        idx += 1;
+    }
+
+    // Add new fields from override
+    inline for (override_fields) |of| {
+        comptime var found = false;
+        inline for (base_fields) |bf| {
+            if (std.mem.eql(u8, bf.name, of.name)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            fields[idx] = of;
+            idx += 1;
+        }
+    }
+
+    return @Type(.{
+        .@"struct" = .{
+            .layout = .auto,
+            .fields = &fields,
+            .decls = &.{},
+            .is_tuple = false,
+        },
+    });
+}
+
 pub fn ComponentCtx(comptime PropsType: type) type {
     if (PropsType == void) {
         return struct {

@@ -26,6 +26,8 @@ pub const NodeKind = enum {
     zx_shorthand_attribute,
     /// @{allocator} shorthand for @allocator={allocator}
     zx_builtin_shorthand_attribute,
+    /// {..props} spread all properties of props as attributes
+    zx_spread_attribute,
     zx_builtin_name,
     zx_attribute_name,
     zx_attribute_value,

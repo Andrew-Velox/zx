@@ -97,6 +97,7 @@ module.exports = grammar(zig, {
       $.zx_regular_attribute,
       $.zx_shorthand_attribute,
       $.zx_builtin_shorthand_attribute,
+      $.zx_spread_attribute,
     ),
 
     // Shorthand attribute: {name} expands to name={name}
@@ -112,6 +113,14 @@ module.exports = grammar(zig, {
       '@',
       '{',
       field('name', $.identifier),
+      '}',
+    ),
+
+    // Spread attribute: {..expr} spreads all properties of expr as attributes
+    zx_spread_attribute: $ => seq(
+      '{',
+      '..',
+      field('expression', $.expression),
       '}',
     ),
 

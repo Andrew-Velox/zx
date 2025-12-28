@@ -210,6 +210,29 @@
           }
         },
         {
+          "name": "meta.attribute.spread.zx",
+          "begin": "\\s+(\\{)(\\.\\.)",
+          "end": "(\\})",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.section.embedded.begin.zx"
+            },
+            "2": {
+              "name": "keyword.operator.spread.zx"
+            }
+          },
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.section.embedded.end.zx"
+            }
+          },
+          "patterns": [
+            {
+              "include": "source.zig"
+            }
+          ]
+        },
+        {
           "name": "meta.attribute.builtin.zx",
           "match": "\\s+(@[a-zA-Z_][a-zA-Z0-9_]*)(?=[\\s/>])",
           "captures": {

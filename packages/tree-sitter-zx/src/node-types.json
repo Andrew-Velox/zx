@@ -2606,6 +2606,10 @@
         {
           "type": "zx_shorthand_attribute",
           "named": true
+        },
+        {
+          "type": "zx_spread_attribute",
+          "named": true
         }
       ]
     }
@@ -2887,6 +2891,22 @@
         "types": [
           {
             "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "zx_spread_attribute",
+    "named": true,
+    "fields": {
+      "expression": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
             "named": true
           }
         ]

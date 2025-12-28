@@ -250,6 +250,9 @@ test "attribute_types" {
 test "attribute_shorthand" {
     try test_fmt("attribute/shorthand");
 }
+test "attribute_spread" {
+    try test_fmt("attribute/spread");
+}
 
 // === Element ===
 test "element_void" {

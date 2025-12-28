@@ -15,6 +15,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                 _zx.attrf("data-name", "person-{s}", .{
                     _zx.attrv(name),
                 }),
+                _zx.attrf("id", "test", .{}),
                 _zx.attr("data-normal", name),
                 _zx.attr("data-text", "{text}"),
                 _zx.attr("data-t", "`{text}`"),

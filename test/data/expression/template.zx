@@ -3,7 +3,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
     const name = "John";
 
     return (
-        <section @allocator={allocator} class=`test-{count} {getThemeClass(.dark)}` data-name=`person-{name}` data-normal={name} data-text="{text}" data-t="`{text}`">
+        <section @allocator={allocator} class=`test-{count} {getThemeClass(.dark)}` data-name=`person-{name}` id=`test` data-normal={name} data-text="{text}" data-t="`{text}`">
             <p>My name is {name}</p>
         </section>
     );

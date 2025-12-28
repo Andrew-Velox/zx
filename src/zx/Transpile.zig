@@ -743,9 +743,9 @@ pub fn transpileSelfClosing(self: *Ast, node: ts.Node, ctx: *TranspileContext, i
 
         switch (NodeKind.fromNode(child)) {
             .zx_tag_name => tag_name = try self.getNodeText(child),
-            .zx_attribute, .zx_builtin_attribute, .zx_regular_attribute, .zx_shorthand_attribute, .zx_builtin_shorthand_attribute => {
+            .zx_attribute, .zx_builtin_attribute, .zx_regular_attribute, .zx_shorthand_attribute, .zx_builtin_shorthand_attribute, .zx_spread_attribute => {
                 const attr = try parseAttribute(self, child);
-                if (attr.name.len > 0) {
+                if (attr.isValid()) {
                     try attributes.append(ctx.output.allocator, attr);
                 }
             },
@@ -787,9 +787,9 @@ pub fn transpileFullElement(self: *Ast, node: ts.Node, ctx: *TranspileContext, i
 
                     switch (NodeKind.fromNode(tag_child)) {
                         .zx_tag_name => tag_name = try self.getNodeText(tag_child),
-                        .zx_attribute, .zx_builtin_attribute, .zx_regular_attribute => {
+                        .zx_attribute, .zx_builtin_attribute, .zx_regular_attribute, .zx_shorthand_attribute, .zx_builtin_shorthand_attribute, .zx_spread_attribute => {
                             const attr = try parseAttribute(self, tag_child);
-                            if (attr.name.len > 0) {
+                            if (attr.isValid()) {
                                 try attributes.append(ctx.output.allocator, attr);
                             }
                         },
@@ -975,50 +975,123 @@ fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: 
         try ctx.writeM("_zx.cmp", node.startByte(), self);
         try ctx.write("(");
         try ctx.write(tag);
-        try ctx.write(", .{");
+        try ctx.write(", ");
 
-        var first_prop = true;
+        var spreads = std.ArrayList(ZxAttribute){};
+        defer spreads.deinit(ctx.output.allocator);
+        var regular_props = std.ArrayList(ZxAttribute){};
+        defer regular_props.deinit(ctx.output.allocator);
+
         for (attributes) |attr| {
             if (attr.is_builtin) continue;
-            if (!first_prop) try ctx.write(",");
-            first_prop = false;
-
-            try ctx.write(" .");
-            try ctx.write(attr.name);
-            try ctx.write(" = ");
-            // If value contains a zx_block, transpile it instead of writing raw text
-            if (attr.zx_block_node) |zx_node| {
-                try transpileBlock(self, zx_node, ctx);
+            if (attr.is_spread) {
+                try spreads.append(ctx.output.allocator, attr);
             } else {
-                try ctx.writeM(attr.value, attr.value_byte_offset, self);
+                try regular_props.append(ctx.output.allocator, attr);
             }
         }
 
-        // Add children prop if there are children
-        if (children.len > 0) {
-            if (!first_prop) try ctx.write(",");
-            try ctx.write(" .children = ");
+        const has_spread = spreads.items.len > 0;
+        const has_regular_props = regular_props.items.len > 0;
+        const has_children = children.len > 0;
 
-            if (children.len == 1) {
-                // Single child - transpile directly
-                _ = try transpileChild(self, children[0], ctx, false, true);
-            } else {
-                // Multiple children - wrap in fragment
-                try ctx.write("_zx.ele(.fragment, .{ .children = &.{");
-                for (children, 0..) |child, idx| {
-                    const saved_len = ctx.output.items.len;
-                    const had_output = try transpileChild(self, child, ctx, false, idx == children.len - 1);
-                    if (had_output) {
-                        try ctx.write(", ");
+        // Case 1: Single spread
+        if (spreads.items.len == 1 and !has_regular_props and !has_children) {
+            try ctx.writeM(spreads.items[0].value, spreads.items[0].value_byte_offset, self);
+            try ctx.write(")");
+        }
+        // Case 2: Multiple spreads with other props or children - use propsM
+        else if (has_spread) {
+            var need_merge = false;
+            if (spreads.items.len > 0) {
+                try ctx.write("_zx.propsM(");
+                try ctx.writeM(spreads.items[0].value, spreads.items[0].value_byte_offset, self);
+                need_merge = true;
+            }
+
+            for (spreads.items[1..]) |spread| {
+                try ctx.write(", ");
+                try ctx.writeM(spread.value, spread.value_byte_offset, self);
+            }
+
+            if (has_regular_props or has_children) {
+                if (need_merge) try ctx.write(", ");
+                try ctx.write(".{");
+
+                var first_prop = true;
+                for (regular_props.items) |attr| {
+                    if (!first_prop) try ctx.write(",");
+                    first_prop = false;
+
+                    try ctx.write(" .");
+                    try ctx.write(attr.name);
+                    try ctx.write(" = ");
+                    if (attr.zx_block_node) |zx_node| {
+                        try transpileBlock(self, zx_node, ctx);
                     } else {
-                        ctx.output.shrinkRetainingCapacity(saved_len);
+                        try ctx.writeM(attr.value, attr.value_byte_offset, self);
                     }
                 }
-                try ctx.write("} })");
+
+                // Add children prop
+                if (has_children) {
+                    if (!first_prop) try ctx.write(",");
+                    try ctx.write(" .children = ");
+                    try writeChildrenValue(self, children, ctx);
+                }
+
+                try ctx.write(" }");
+            }
+
+            if (need_merge) try ctx.write(")");
+            try ctx.write(")");
+        }
+        // Case 3: Regular attrs
+        else {
+            try ctx.write(".{");
+
+            var first_prop = true;
+            for (regular_props.items) |attr| {
+                if (!first_prop) try ctx.write(",");
+                first_prop = false;
+
+                try ctx.write(" .");
+                try ctx.write(attr.name);
+                try ctx.write(" = ");
+                if (attr.zx_block_node) |zx_node| {
+                    try transpileBlock(self, zx_node, ctx);
+                } else {
+                    try ctx.writeM(attr.value, attr.value_byte_offset, self);
+                }
+            }
+
+            // Add children prop
+            if (has_children) {
+                if (!first_prop) try ctx.write(",");
+                try ctx.write(" .children = ");
+                try writeChildrenValue(self, children, ctx);
+            }
+
+            try ctx.write(" })");
+        }
+    }
+}
+
+fn writeChildrenValue(self: *Ast, children: []const ts.Node, ctx: *TranspileContext) !void {
+    if (children.len == 1) {
+        _ = try transpileChild(self, children[0], ctx, false, true);
+    } else {
+        try ctx.write("_zx.ele(.fragment, .{ .children = &.{");
+        for (children, 0..) |child, idx| {
+            const saved_len = ctx.output.items.len;
+            const had_output = try transpileChild(self, child, ctx, false, idx == children.len - 1);
+            if (had_output) {
+                try ctx.write(", ");
+            } else {
+                ctx.output.shrinkRetainingCapacity(saved_len);
             }
         }
-
-        try ctx.write(" })");
+        try ctx.write("} })");
     }
 }
 
@@ -1787,11 +1860,26 @@ pub const ZxAttribute = struct {
     template_string_node: ?ts.Node = null,
     /// True if this is a shorthand attribute {name} -> name={name}
     is_shorthand: bool = false,
+    /// True if this is a spread attribute {..expr}
+    is_spread: bool = false,
 
-    /// Check if any attributes in the list are regular (non-builtin)
+    /// Check if attribute is valid (has name or is spread)
+    fn isValid(self: ZxAttribute) bool {
+        return self.name.len > 0 or self.is_spread;
+    }
+
+    /// Check if any attributes in the list are regular (non-builtin, non-spread)
     fn hasRegular(attrs: []const ZxAttribute) bool {
         for (attrs) |attr| {
-            if (!attr.is_builtin) return true;
+            if (!attr.is_builtin and !attr.is_spread) return true;
+        }
+        return false;
+    }
+
+    /// Check if any attributes in the list are spread attributes
+    fn hasSpread(attrs: []const ZxAttribute) bool {
+        for (attrs) |attr| {
+            if (attr.is_spread) return true;
         }
         return false;
     }
@@ -1819,15 +1907,33 @@ fn writeAttributes(self: *Ast, attributes: []const ZxAttribute, ctx: *TranspileC
     }
 
     // Write regular attributes using _zx.attrs() and _zx.attr() for type-aware handling
-    if (!ZxAttribute.hasRegular(attributes)) return;
+    const has_regular = ZxAttribute.hasRegular(attributes);
+    const has_spread = ZxAttribute.hasSpread(attributes);
+
+    if (!has_regular and !has_spread) return;
 
     try ctx.writeIndent();
-    try ctx.write(".attributes = _zx.attrs(.{\n");
+
+    // If we have spread attributes, use _zx.attrsM to merge regular and spread attributes
+    if (has_spread) {
+        try ctx.write(".attributes = _zx.attrsM(.{\n");
+    } else {
+        try ctx.write(".attributes = _zx.attrs(.{\n");
+    }
     ctx.indent_level += 1;
 
     for (attributes) |attr| {
         if (attr.is_builtin) continue;
+
         try ctx.writeIndent();
+
+        // Handle spread attributes
+        if (attr.is_spread) {
+            try ctx.write("_zx.attrSpr(");
+            try ctx.writeM(attr.value, attr.value_byte_offset, self);
+            try ctx.write("),\n");
+            continue;
+        }
 
         // Handle template strings with _zx.attrf
         if (attr.template_string_node) |template_node| {
@@ -1998,6 +2104,28 @@ pub fn parseAttribute(self: *Ast, node: ts.Node) !ZxAttribute {
             .value = "\"\"",
             .value_byte_offset = node.startByte(),
             .is_builtin = false,
+        };
+    }
+
+    // Handle spread attribute: {..expr} -> spread all properties of expr
+    if (attr_kind == .zx_spread_attribute) {
+        const expr_node = attr_node.childByFieldName("expression");
+        if (expr_node) |e| {
+            const expr_text = try self.getNodeText(e);
+            return ZxAttribute{
+                .name = "",
+                .value = expr_text,
+                .value_byte_offset = e.startByte(),
+                .is_builtin = false,
+                .is_spread = true,
+            };
+        }
+        return ZxAttribute{
+            .name = "",
+            .value = "",
+            .value_byte_offset = node.startByte(),
+            .is_builtin = false,
+            .is_spread = true,
         };
     }
 

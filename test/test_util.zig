@@ -80,6 +80,7 @@ pub const TestFileCache = struct {
         "attribute/dynamic",
         "attribute/types",
         "attribute/shorthand",
+        "attribute/spread",
 
         // Element
         "element/void",
