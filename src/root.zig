@@ -251,7 +251,7 @@ fn coerceProps(comptime TargetType: type, props: anytype) TargetType {
         } else if (field.defaultValue()) |default_value| {
             @field(result, field.name) = default_value;
         } else {
-            @compileError(std.fmt.comptimePrint("Missing required field: {s}", .{field.name}));
+            @compileError(std.fmt.comptimePrint("Missing required attribute `{s}` in Component `{s}`", .{ field.name, @typeName(TargetType) }));
         }
     }
 

@@ -27,11 +27,6 @@ pub const routes = [_]zx.App.Meta.Route{
         .page = @import(".zx/pages/examples/form/page.zig").Page,
     },
     .{
-        .path = "/cli",
-        .page = @import(".zx/pages/cli/page.zig").Page,
-        .layout = @import(".zx/pages/cli/layout.zig").Layout,
-    },
-    .{
         .path = "/time",
         .page = @import(".zx/pages/time/page.zig").Page,
         .options = if (@hasDecl(@import(".zx/pages/time/page.zig"), "options")) @import(".zx/pages/time/page.zig").options else null,
