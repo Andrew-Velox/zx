@@ -455,6 +455,7 @@ fn renderFragment(
     }
 
     try w.writeAll("<>");
+    ctx.suppress_leading_space = false;
 
     // Check if we have meaningful content
     const has_meaningful_content = blk: {
@@ -562,6 +563,7 @@ fn renderElement(
     // Render start tag
     if (start_tag_node) |st| {
         try renderStartTag(self, st, w);
+        ctx.suppress_leading_space = false;
     }
 
     // - If there's whitespace/newline between start tag and first content -> vertical
