@@ -1228,10 +1228,6 @@ pub fn transpileExprBlock(self: *Ast, node: ts.Node, ctx: *TranspileContext) err
                 try transpileSwitch(self, child, ctx);
                 continue;
             },
-            .array_type => {
-                try transpileFormat(self, child, ctx);
-                continue;
-            },
             .multiline_string => {
                 try transpileMultilineString(self, child, ctx);
                 continue;
@@ -1277,28 +1273,6 @@ fn transpileMultilineString(self: *Ast, node: ts.Node, ctx: *TranspileContext) !
     // Write closing paren with proper indentation
     try ctx.writeIndent();
     try ctx.write(")");
-}
-
-pub fn transpileFormat(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {
-    // Format expression: {[expr:format]} is parsed as array_type
-    // Extract expr and format from the source
-    const text = try self.getNodeText(node);
-
-    // Parse [expr:format] or [expr]
-    if (text.len > 2 and text[0] == '[' and text[text.len - 1] == ']') {
-        const inner = text[1 .. text.len - 1];
-        const colon_idx = std.mem.indexOfScalar(u8, inner, ':');
-
-        const expr = if (colon_idx) |idx| inner[0..idx] else inner;
-        const format = if (colon_idx) |idx| inner[idx + 1 ..] else "d";
-
-        try ctx.writeM("_zx.fmt(\"", node.startByte(), self);
-        try ctx.write("{");
-        try ctx.write(format);
-        try ctx.write("}\", .{");
-        try ctx.write(expr);
-        try ctx.write("})");
-    }
 }
 
 pub fn transpileIf(self: *Ast, node: ts.Node, ctx: *TranspileContext) !void {

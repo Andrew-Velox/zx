@@ -26,7 +26,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                     .{
                         .children = &.{
                             _zx.txt("Count: "),
-                            _zx.fmt("{d}", .{count}),
+                            _zx.expr(count),
                         },
                     },
                 ),
@@ -35,7 +35,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                     .{
                         .children = &.{
                             _zx.txt("Hex: 0x"),
-                            _zx.fmt("{x}", .{hex_value}),
+                            _zx.expr(hex_value),
                         },
                     },
                 ),
@@ -44,7 +44,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                     .{
                         .children = &.{
                             _zx.txt("Percentage: "),
-                            _zx.fmt("{d}", .{percentage}),
+                            _zx.expr(percentage),
                             _zx.txt("%"),
                         },
                     },

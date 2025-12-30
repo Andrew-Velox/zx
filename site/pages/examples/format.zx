@@ -6,7 +6,7 @@ pub fn FormatDemo(allocator: zx.Allocator) zx.Component {
     return (
         <section @allocator={allocator}>
             <p>Count: {count}</p>
-            <p>Hex: 0x{[hex_value:x]}</p>
+            <p>Hex: 0x{hex_value}</p>
             <p>Percentage: {percentage}%</p>
         </section>
     );

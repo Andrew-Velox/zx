@@ -114,7 +114,7 @@ pub fn ExampleBlock(allocator: zx.Allocator, props: ExampleBlockProps) zx.Compon
                     </div>
                     {for (files) |file| (
                         <div @allocator={allocator} class="sandbox-code file-content" id={file.content_id}>
-                            <pre class="sandbox-code-pre"><code class="hljs sandbox-code-lines">{[file.highlighted:s]}</code></pre>
+                            <pre class="sandbox-code-pre"><code class="hljs sandbox-code-lines" @escaping={.none}>{file.highlighted}</code></pre>
                         </div>
                     )}
                 </div>

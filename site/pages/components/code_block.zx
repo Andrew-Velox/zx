@@ -18,13 +18,13 @@ pub fn CodeBlock(allocator: zx.Allocator, props: CodeBlockProps) zx.Component {
                 </div>
             </div>
             <div class="sandbox-code">
-                <pre class="sandbox-code-pre"><code class="hljs sandbox-code-lines">{[highlighted:s]}</code></pre>
+                <pre class="sandbox-code-pre"><code class="hljs sandbox-code-lines" @escaping={.none}>{highlighted}</code></pre>
             </div>
         </div>
     ) else (
         <div class="sandbox" style="box-shadow: none; border-radius: 8px;" @allocator={allocator}>
             <div class="sandbox-code">
-                <pre class="sandbox-code-pre"><code class="hljs sandbox-code-lines">{[highlighted:s]}</code></pre>
+                <pre class="sandbox-code-pre"><code class="hljs sandbox-code-lines" @escaping={.none}>{highlighted}</code></pre>
             </div>
         </div>
     );

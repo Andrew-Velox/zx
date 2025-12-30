@@ -34,9 +34,10 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                             _zx.ele(
                                 .p,
                                 .{
+                                    .escaping = .html,
                                     .children = &.{
                                         _zx.txt("Unsafe HTML: "),
-                                        _zx.fmt("{s}", .{unsafe_html}),
+                                        _zx.expr(unsafe_html),
                                     },
                                 },
                             ),

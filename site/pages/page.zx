@@ -115,7 +115,7 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
                             </div>
                             <div class="code-example-title">example.zx</div>
                         </div>
-                        <pre><code class="hljs">{[overview_code_highlighted:s]}</code></pre>
+                        <pre><code class="hljs" @escaping={.none}>{overview_code_highlighted}</code></pre>
                     </div>
                 </div>
             </section>

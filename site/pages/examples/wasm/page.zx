@@ -4,8 +4,8 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
         <div @allocator={allocator} class="todo-container">
             <TodoApp @rendering={.client} />
 
-            <style>
-                {[@embedFile("style.css"):s]}
+            <style @escaping={.none}>
+                {@embedFile("style.css")}
             </style>
             <script type="module" src="/assets/main.js" />
         </div>

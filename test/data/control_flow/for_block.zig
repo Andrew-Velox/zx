@@ -17,7 +17,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                                         .i,
                                         .{
                                             .children = &.{
-                                                _zx.fmt("{c}", .{char}),
+                                                _zx.expr(char),
                                             },
                                         },
                                     ),

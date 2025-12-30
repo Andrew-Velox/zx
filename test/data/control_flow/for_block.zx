@@ -4,7 +4,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
         <main @allocator={allocator}>
             {for (chars) |char| (
                 <div>
-                    <i>{[char:c]}</i>
+                    <i>{char}</i>
                 </div>
             )}
         </main>
