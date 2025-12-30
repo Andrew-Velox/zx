@@ -63,6 +63,10 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                     .pre,
                     .{
                         .escaping = .html,
+                        .attributes = _zx.attrs(.{
+                            _zx.attr("class", "bold"),
+                            _zx.attr("class", "italic"),
+                        }),
                         .children = &.{
                             _zx.txt("                \n"),
                             _zx.expr(

@@ -36,7 +36,7 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                     \\<h1>name</h1>
                 }
             </pre>
-            <pre @escaping={.html}>
+            <pre @escaping={.html} class="bold" class="italic">
                 {
                     \\<h1>name</h1>
                 }
