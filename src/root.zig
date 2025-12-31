@@ -539,20 +539,65 @@ pub const Component = union(enum) {
         try self.renderInner(writer, .{ .escaping = .html, .rendering = .server });
     }
 
-    /// Stream method that renders HTML while collecting elements with 'slot' attribute
-    /// Returns an array of Component elements that have a 'slot' attribute
-    pub fn stream(self: Component, allocator: std.mem.Allocator, writer: *std.Io.Writer) ![]Component {
-        var slots = std.array_list.Managed(Component).init(allocator);
-        errdefer slots.deinit();
+    pub const streaming_bootstrap_script =
+        \\<script>window.$ZX=function(id,html){var t=document.getElementById('zx-async-'+id);if(t){var d=document.createElement('div');d.innerHTML=html;while(d.firstChild)t.parentNode.insertBefore(d.firstChild,t);t.remove();}}</script>
+    ;
 
-        try self.renderInner(writer, &slots);
-        return slots.toOwnedSlice();
+    /// Async component collected during streaming
+    pub const AsyncComponent = struct {
+        id: u32,
+        component: Component,
+
+        pub fn renderScript(self: AsyncComponent, allocator: std.mem.Allocator) ![]const u8 {
+            var aw = std.io.Writer.Allocating.init(allocator);
+            errdefer aw.deinit();
+
+            try self.component.render(&aw.writer);
+            const html = aw.written();
+
+            // Build minimal script: <script>$ZX(id,`content`)</script>
+            var script_writer = std.io.Writer.Allocating.init(allocator);
+            errdefer script_writer.deinit();
+
+            try script_writer.writer.print("<script>$ZX({d},`", .{self.id});
+
+            // Escape backticks, backslashes, and $ in HTML for template literal
+            for (html) |c| {
+                switch (c) {
+                    '`' => try script_writer.writer.writeAll("\\`"),
+                    '\\' => try script_writer.writer.writeAll("\\\\"),
+                    '$' => try script_writer.writer.writeAll("\\$"),
+                    else => try script_writer.writer.writeByte(c),
+                }
+            }
+
+            try script_writer.writer.writeAll("`)</script>");
+
+            return script_writer.written();
+        }
+    };
+
+    /// Stream method that renders HTML while collecting async components
+    /// Writes placeholders for @async={.stream} components and returns them for parallel rendering
+    pub fn stream(self: Component, allocator: std.mem.Allocator, writer: *std.Io.Writer) ![]AsyncComponent {
+        var async_components = std.array_list.Managed(AsyncComponent).init(allocator);
+        errdefer async_components.deinit();
+
+        var counter: u32 = 0;
+        try self.renderInner(writer, .{
+            .escaping = .html,
+            .rendering = .server,
+            .async_components = &async_components,
+            .async_counter = &counter,
+        });
+        return async_components.toOwnedSlice();
     }
 
     const RenderInnerOptions = struct {
-        slots: ?*std.array_list.Managed(Component) = null,
         escaping: ?BuiltinAttribute.Escaping = .html,
         rendering: ?BuiltinAttribute.Rendering = .server,
+        async_components: ?*std.array_list.Managed(AsyncComponent) = null,
+        async_counter: ?*u32 = null,
     };
     fn renderInner(self: Component, writer: *std.Io.Writer, options: RenderInnerOptions) !void {
         switch (self) {
@@ -583,23 +628,30 @@ pub const Component = union(enum) {
                 try writer.print("</{s}>", .{"div"});
             },
             .element => |elem| {
-                // Check if this element has a 'slot' attribute and we're collecting slots
-                if (options.slots != null) {
-                    var has_slot = false;
-                    if (elem.attributes) |attributes| {
-                        for (attributes) |attribute| {
-                            if (std.mem.eql(u8, attribute.name, "slot")) {
-                                has_slot = true;
-                                break;
-                            }
-                        }
+                // Check if this element is async and we're collecting async components
+                if (options.async_components != null and elem.async == .stream) {
+                    const async_id = options.async_counter.?.*;
+                    options.async_counter.?.* += 1;
+
+                    // Write placeholder div with fallback content
+                    try writer.print("<div id=\"zx-async-{d}\">", .{async_id});
+
+                    // Render fallback content if provided
+                    if (elem.fallback) |fallback| {
+                        try fallback.*.renderInner(writer, .{
+                            .escaping = options.escaping,
+                            .rendering = options.rendering,
+                        });
                     }
 
-                    // If element has 'slot' attribute, accumulate it instead of rendering
-                    if (has_slot) {
-                        try options.slots.?.append(self);
-                        return;
-                    }
+                    try writer.writeAll("</div>");
+
+                    // Collect for async rendering
+                    try options.async_components.?.append(.{
+                        .id = async_id,
+                        .component = self,
+                    });
+                    return;
                 }
 
                 // <><div>...</div></> => <div>...</div>
@@ -648,9 +700,10 @@ pub const Component = union(enum) {
                 if (elem.children) |children| {
                     // Use element's escaping setting if set, otherwise inherit from parent
                     const child_options = RenderInnerOptions{
-                        .slots = options.slots,
                         .escaping = elem.escaping orelse options.escaping,
                         .rendering = elem.rendering orelse options.rendering,
+                        .async_components = options.async_components,
+                        .async_counter = options.async_counter,
                     };
                     for (children) |child| {
                         try child.renderInner(writer, child_options);
@@ -756,6 +809,8 @@ pub const Element = struct {
 
     escaping: ?BuiltinAttribute.Escaping = .html,
     rendering: ?BuiltinAttribute.Rendering = .server,
+    async: ?BuiltinAttribute.Async = .sync,
+    fallback: ?*const Component = null,
 };
 
 const ZxOptions = struct {
@@ -764,6 +819,8 @@ const ZxOptions = struct {
     allocator: ?std.mem.Allocator = null,
     escaping: ?BuiltinAttribute.Escaping = .html,
     rendering: ?BuiltinAttribute.Rendering = .server,
+    async: ?BuiltinAttribute.Async = .sync,
+    fallback: ?*const Component = null,
 };
 
 pub fn zx(tag: ElementTag, options: ZxOptions) Component {
@@ -783,7 +840,7 @@ pub fn lazy(allocator: Allocator, comptime func: anytype, props: anytype) Compon
 }
 
 /// Context for creating components with allocator support
-const ZxContext = struct {
+pub const ZxContext = struct {
     allocator: ?std.mem.Allocator = null,
 
     pub fn getAlloc(self: *ZxContext) std.mem.Allocator {
@@ -826,6 +883,8 @@ const ZxContext = struct {
             .attributes = attributes_copy,
             .escaping = options.escaping,
             .rendering = options.rendering,
+            .async = options.async,
+            .fallback = options.fallback,
         } };
     }
 
@@ -1202,6 +1261,14 @@ const ZxContext = struct {
         }
     }
 
+    /// Allocates a Component and returns a pointer to it (used for @fallback)
+    pub fn ptr(self: *ZxContext, component: Component) *const Component {
+        const allocator = self.getAlloc();
+        const allocated = allocator.create(Component) catch @panic("OOM");
+        allocated.* = component;
+        return allocated;
+    }
+
     pub fn client(self: *ZxContext, options: ClientComponentOptions, props: anytype) Component {
         const allocator = self.getAlloc();
 
@@ -1260,6 +1327,8 @@ pub const PageOptions = struct {
     caching: BuiltinAttribute.Caching = .none,
     methods: []const PageMethod = &.{.GET},
     static: ?PageOptionsStatic = null,
+    /// Enable streaming SSR with async components
+    streaming: bool = false,
 };
 
 pub const LayoutOptions = struct {
@@ -1408,6 +1477,13 @@ pub const BuiltinAttribute = struct {
         html,
         /// No escaping; outputs raw HTML. Use with caution for trusted content only.
         none, // no escaping
+    };
+
+    pub const Async = enum {
+        /// Render synchronously (default)
+        sync,
+        /// Render asynchronously, stream when ready with inline script replacement
+        stream,
     };
 
     pub const Caching = union(enum) {

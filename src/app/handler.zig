@@ -665,19 +665,155 @@ pub const Handler = struct {
                     }
                 }
 
-                const writer = &layoutctx.response.buffer.writer;
-                _ = writer.write("<!DOCTYPE html>\n") catch |err| {
-                    std.debug.print("Error writing HTML: {}\n", .{err});
-                    break :blk;
-                };
-                page_component.render(writer) catch |err| {
-                    std.debug.print("Error rendering page: {}\n", .{err});
-                    return self.uncaughtError(req, res, err);
-                };
+                // Check if streaming is enabled
+                const streaming_enabled = if (route.page_opts) |opts| opts.streaming else false;
+
+                if (streaming_enabled) {
+                    // Streaming mode: render shell, collect async components, stream results
+                    try self.renderStreaming(res, &page_component, pagectx.arena);
+                } else {
+                    // Normal mode: render everything at once
+                    const writer = &layoutctx.response.buffer.writer;
+                    _ = writer.write("<!DOCTYPE html>\n") catch |err| {
+                        std.debug.print("Error writing HTML: {}\n", .{err});
+                        break :blk;
+                    };
+                    page_component.render(writer) catch |err| {
+                        std.debug.print("Error rendering page: {}\n", .{err});
+                        return self.uncaughtError(req, res, err);
+                    };
+                }
             }
 
             res.content_type = .HTML;
             return;
+        }
+    }
+
+    /// Render a page with streaming SSR support
+    /// Sends the initial shell immediately, then streams async components as they complete
+    fn renderStreaming(self: *Handler, res: *httpz.Response, page_component: *Component, arena: std.mem.Allocator) !void {
+        _ = self;
+
+        var shell_writer = std.io.Writer.Allocating.init(arena);
+        const async_components = page_component.stream(arena, &shell_writer.writer) catch |err| {
+            std.debug.print("Error streaming page: {}\n", .{err});
+            return err;
+        };
+
+        res.chunk("<!DOCTYPE html>\n") catch |err| {
+            std.debug.print("Error sending DOCTYPE: {}\n", .{err});
+            return err;
+        };
+        res.chunk(shell_writer.written()) catch |err| {
+            std.debug.print("Error sending shell: {}\n", .{err});
+            return err;
+        };
+
+        if (async_components.len > 0) {
+            res.chunk(Component.streaming_bootstrap_script) catch |err| {
+                std.debug.print("Error sending bootstrap script: {}\n", .{err});
+                return err;
+            };
+            const AsyncResult = struct {
+                script: []const u8 = &.{},
+                done: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+            };
+
+            const results = std.heap.page_allocator.alloc(AsyncResult, async_components.len) catch |err| {
+                std.debug.print("Error allocating results: {}\n", .{err});
+                return err;
+            };
+            defer std.heap.page_allocator.free(results);
+
+            for (results) |*result| {
+                result.* = .{};
+            }
+
+            var remaining = std.atomic.Value(usize).init(async_components.len);
+
+            const TaskContext = struct {
+                async_comp: Component.AsyncComponent,
+                result: *AsyncResult,
+                remaining: *std.atomic.Value(usize),
+
+                fn work(ctx: *@This()) void {
+                    defer {
+                        _ = ctx.remaining.fetchSub(1, .seq_cst);
+                        std.heap.page_allocator.destroy(ctx);
+                    }
+
+                    const script = ctx.async_comp.renderScript(std.heap.page_allocator) catch |err| {
+                        std.debug.print("Error rendering async component {d}: {}\n", .{ ctx.async_comp.id, err });
+                        ctx.result.done.store(true, .seq_cst);
+                        return;
+                    };
+
+                    ctx.result.script = script;
+                    ctx.result.done.store(true, .seq_cst);
+                }
+            };
+
+            var threads = std.heap.page_allocator.alloc(?std.Thread, async_components.len) catch |err| {
+                std.debug.print("Error allocating threads: {}\n", .{err});
+                return err;
+            };
+            defer std.heap.page_allocator.free(threads);
+
+            for (async_components, 0..) |async_comp, i| {
+                const ctx = std.heap.page_allocator.create(TaskContext) catch {
+                    threads[i] = null;
+                    continue;
+                };
+                ctx.* = .{
+                    .async_comp = async_comp,
+                    .result = &results[i],
+                    .remaining = &remaining,
+                };
+
+                threads[i] = std.Thread.spawn(.{}, TaskContext.work, .{ctx}) catch blk: {
+                    std.heap.page_allocator.destroy(ctx);
+                    _ = remaining.fetchSub(1, .seq_cst);
+                    results[i].done.store(true, .seq_cst);
+                    break :blk null;
+                };
+            }
+
+            var streamed = std.heap.page_allocator.alloc(bool, async_components.len) catch |err| {
+                std.debug.print("Error allocating streamed flags: {}\n", .{err});
+                return err;
+            };
+            defer std.heap.page_allocator.free(streamed);
+            @memset(streamed, false);
+
+            var completed: usize = 0;
+            var connection_closed = false;
+            while (completed < async_components.len and !connection_closed) {
+                for (results, 0..) |*result, i| {
+                    if (streamed[i]) continue;
+
+                    if (result.done.load(.seq_cst)) {
+                        if (result.script.len > 0) {
+                            res.chunk(result.script) catch |err| {
+                                std.debug.print("Error streaming async component: {}\n", .{err});
+                                connection_closed = true;
+                                break;
+                            };
+                        }
+                        streamed[i] = true;
+                        completed += 1;
+                    }
+                }
+                if (completed < async_components.len and !connection_closed) {
+                    std.Thread.sleep(5 * std.time.ns_per_ms);
+                }
+            }
+
+            for (threads) |maybe_thread| {
+                if (maybe_thread) |thread| {
+                    thread.join();
+                }
+            }
         }
     }
 

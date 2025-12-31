@@ -1,10 +1,10 @@
 # ZX
 
-A Zig library for building full-stack web applications with JSX-like syntax. Write declarative UI components using familiar JSX patterns, transpiled to efficient Zig code.
+A full-stack web framework for Zig. Write declarative UI components using familiar JSX patterns, transpiled to efficient Zig code.
 
-ZX combines the power and performance of Zig with the expressiveness of JSX, enabling you to build fast, type-safe web applications. ZX is significantly faster than frameworks like Next.js at SSR.
+ZX combines the power and performance of Zig with the expressiveness of JSX, enabling you to build fast, type-safe web applications.
 
-**[Full Documentation →](https://ziex.dev/docs)**
+**[Documentation →](https://ziex.dev/learn)**
 
 ## Installation
 
@@ -81,19 +81,21 @@ const zx = @import("zx");
 ## Feature Checklist
 
 - [x] Server Side Rendering (SSR)
+    - [ ] `on`event handler
+    - [x] Streaming
 - [x] Static Site Generation (SSG)
     - [ ] `getStaticParams`, `getStaticProps`
 - [ ] Client Side Rendering (CSR) via WebAssembly (_WIP_)
     - [x] Virtual DOM and diffing
     - [x] Rendering only changed nodes
-    - [ ] useState hook
-    - [ ] useEffect hook
+    - [x] `on`event handler
+    - [ ] State managment
+    - [ ] Lifecycle hook
 - [x] Client Side Rendering (CSR) via React
 - [x] Routing
     - [x] File-system Routing
     - [x] Search Parameters
     - [x] Path Segments
-- [ ] Streaming
 - [x] Components
 - [x] Control Flow
     - [x] `if`
@@ -111,19 +113,22 @@ const zx = @import("zx");
     - [x] CSS (via plugins such as Tailwind)
     - [x] JS/TS (via esbuild)
     - [x] HTML (optimized by default)
-- [ ] Middleware
+- [ ] Middleware (_cancalled_)
 - [ ] Caching (configurable)
     - [ ] Component
     - [ ] Layout
     - [x] Page
     - [ ] Assets
-- [ ] API Endpoints
-- [ ] Server Actions
-- [ ] Plugin
+- [ ] API Route
+- [ ] Plugin (_Alpha_)
     - [x] Builtin TailwindCSS and Esbuild
     - [x] Command based plugin system
     - [ ] Source based plugin system
-- [ ] Global App Context
+- [ ] Context (configurable)
+    - [ ] App
+    - [ ] Layout
+    - [ ] Page
+    - [x] Component
 - [x] `error.zx` for default and per-route error page
 - [x] `notfound.zx` for default and per-route error page
 - [x] CLI
@@ -131,12 +136,17 @@ const zx = @import("zx");
     - [x] `transpile` Transpile .zx files to Zig source code
     - [x] `serve` Serve the project
     - [x] `dev` HMR or Rebuild on Change
-    - [x] `fmt` Format the ZX source code (_Alpha_)
+    - [x] `fmt` Format the ZX source code
     - [x] `export` Generate static site assets
     - [x] `bundle` Bundle the ZX executable with public/assets and exe
     - [x] `version` Show the version of the ZX CLI
     - [x] `update` Update the version of ZX dependency
     - [x] `upgrade` Upgrade the version of ZX CLI
+- [ ] Native
+    - [ ] iOS
+    - [ ] Android
+    - [ ] macOS
+    - [ ] Windows
 
 #### Editor Support
 

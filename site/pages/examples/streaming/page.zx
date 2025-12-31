@@ -1,0 +1,102 @@
+pub const options = zx.PageOptions{
+    .streaming = true,
+};
+
+pub fn Page(ctx: zx.PageContext) zx.Component {
+    const allocator = ctx.arena;
+
+    return (
+        <main lang="en" @allocator={allocator}>
+            <h1>Streaming SSR Demo</h1>
+            <div class="card">
+                <h2>Instant Content</h2>
+                <p>This section renders immediately.</p>
+            </div>
+
+            <section class="card user" @async={.stream} @fallback={(<UserProfile user_id={0} />)}>
+                <UserProfile user_id={42} />
+            </section>
+
+            <section class="card posts" @async={.stream} @fallback={(<RecentPosts count={0} />)}>
+                <RecentPosts count={3} />
+            </section>
+
+            <section class="card stats" @async={.stream} @fallback={(<SiteStats loading={true} />)}>
+                <SiteStats loading={false} />
+            </section>
+
+            <footer>
+                <p>Powered by ZX Framework</p>
+            </footer>
+        </main>
+    );
+}
+
+fn UserProfile(allocator: zx.Allocator, props: struct { user_id: u32 }) zx.Component {
+    if (props.user_id != 0) {
+        std.Thread.sleep(700 * std.time.ns_per_ms);
+    }
+
+    const name = if (props.user_id == 0) "....." else "Jane Developer";
+    const role = if (props.user_id == 0) "....." else "Full-Stack Engineer";
+    const status = if (props.user_id == 0) "....." else "Online";
+    const id_text = if (props.user_id == 0) "....." else "42";
+
+    return (
+        <div @allocator={allocator}>
+            <h2>User Profile</h2>
+            <p><strong>User ID: </strong> {id_text}</p>
+            <p><strong>Name: </strong> {name}</p>
+            <p><strong>Role: </strong> {role}</p>
+            <p><strong>Status: </strong> {status}</p>
+        </div>
+    );
+}
+
+fn RecentPosts(allocator: zx.Allocator, props: struct { count: u32 }) zx.Component {
+    if (props.count != 0) {
+        std.Thread.sleep(1600 * std.time.ns_per_ms);
+    }
+
+    const title = if (props.count == 0) "Recent Posts (.....)" else "Recent Posts (3)";
+    const post1 = if (props.count == 0) "....." else "Getting Started with ZX Framework";
+    const post2 = if (props.count == 0) "....." else "Streaming SSR: The Future of Web";
+    const post3 = if (props.count == 0) "....." else "Why Zig for Web Development?";
+
+    return (
+        <div @allocator={allocator}>
+            <h2>{title}</h2>
+            <ul>
+                <li>{post1}</li>
+                <li>{post2}</li>
+                <li>{post3}</li>
+            </ul>
+        </div>
+    );
+}
+
+fn SiteStats(allocator: zx.Allocator, props: struct { loading: bool }) zx.Component {
+    if (!props.loading) {
+        std.Thread.sleep(500 * std.time.ns_per_ms);
+    }
+
+    const users = if (props.loading) "....." else "12,847";
+    const active = if (props.loading) "....." else "1,234";
+    const posts = if (props.loading) "....." else "89";
+    const response = if (props.loading) "....." else "42ms";
+
+    return (
+        <div @allocator={allocator}>
+            <h2>Site Statistics</h2>
+            <ul>
+                <li><strong>Total Users: </strong> {users}</li>
+                <li><strong>Active Today: </strong> {active}</li>
+                <li><strong>Posts This Week: </strong> {posts}</li>
+                <li><strong>Avg Response Time: </strong> {response}</li>
+            </ul>
+        </div>
+    );
+}
+
+const std = @import("std");
+const zx = @import("zx");

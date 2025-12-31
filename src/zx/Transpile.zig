@@ -1800,12 +1800,19 @@ fn writeAttributes(self: *Ast, attributes: []const ZxAttribute, ctx: *TranspileC
         try ctx.write(".");
         try ctx.write(attr.name[1..]); // Skip @ prefix
         try ctx.write(" = ");
+
+        // @fallback={(<UserProfile user_id={0} />)}
+        const is_fallback = std.mem.eql(u8, attr.name, "@fallback");
+        if (is_fallback) try ctx.write("_zx.ptr(");
+
         // If value contains a zx_block, transpile it instead of writing raw text
         if (attr.zx_block_node) |zx_node| {
             try transpileBlock(self, zx_node, ctx);
         } else {
             try ctx.writeM(attr.value, attr.value_byte_offset, self);
         }
+
+        if (is_fallback) try ctx.write(")");
         try ctx.write(",\n");
     }
 

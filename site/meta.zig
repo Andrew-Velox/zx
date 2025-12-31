@@ -37,6 +37,11 @@ pub const routes = [_]zx.App.Meta.Route{
         .page_opts = getOptions(@import(".zx/pages/time/page.zig"), zx.PageOptions),
     },
     .{
+        .path = "/overview",
+        .page = wrapPage(@import(".zx/pages/overview/page.zig").Page),
+        .page_opts = getOptions(@import(".zx/pages/overview/page.zig"), zx.PageOptions),
+    },
+    .{
         .path = "/examples",
         .page = wrapPage(@import(".zx/pages/examples/page.zig").Page),
         .layout = @import(".zx/pages/examples/layout.zig").Layout,
@@ -52,6 +57,11 @@ pub const routes = [_]zx.App.Meta.Route{
         .path = "/examples/wasm",
         .page = wrapPage(@import(".zx/pages/examples/wasm/page.zig").Page),
         .page_opts = getOptions(@import(".zx/pages/examples/wasm/page.zig"), zx.PageOptions),
+    },
+    .{
+        .path = "/examples/streaming",
+        .page = wrapPage(@import(".zx/pages/examples/streaming/page.zig").Page),
+        .page_opts = getOptions(@import(".zx/pages/examples/streaming/page.zig"), zx.PageOptions),
     },
     .{
         .path = "/examples/wasm/simple",
