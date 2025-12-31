@@ -194,6 +194,18 @@ const PageCache = struct {
         }
         return null;
     }
+
+    /// Delete a specific page from the cache by exact path
+    /// Example: del("/users/123")
+    pub fn del(self: *PageCache, path: []const u8) bool {
+        return self.cache.del(path);
+    }
+
+    /// Delete all pages matching a path prefix
+    /// Example: delPath("/users") deletes /users, /users/1, /users/2, etc.
+    pub fn delPath(self: *PageCache, path_prefix: []const u8) usize {
+        return self.cache.delPrefix(path_prefix) catch 0;
+    }
 };
 
 pub const Handler = struct {
@@ -202,10 +214,12 @@ pub const Handler = struct {
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, meta: *App.Meta, cache_config: CacheConfig) !Handler {
-        // Initialize component-level cache
-        _ = zx.ComponentCache.init(allocator);
+        // Initialize unified component cache
+        try zx.cache.init(allocator, .{
+            .max_size = cache_config.max_size,
+        });
 
-        return .{
+        return Handler{
             .meta = meta,
             .allocator = allocator,
             .page_cache = try PageCache.init(allocator, cache_config),

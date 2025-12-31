@@ -10,6 +10,11 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                     .{ .caching = comptime .tag("10s:button") },
                     .{ .title = "Custom Button" },
                 ),
+                _zx.cmp(
+                    Button,
+                    .{ .caching = comptime .tag("10s") },
+                    .{ .title = "Custom Button" },
+                ),
             },
         },
     );
