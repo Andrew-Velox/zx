@@ -6,6 +6,83 @@ pub const Ast = @import("zx/Ast.zig");
 pub const Parse = @import("zx/Parse.zig");
 
 /// Client component rendering type - available on all targets
+/// Component-level cache for rendered HTML fragments
+pub const ComponentCache = struct {
+    const Entry = struct {
+        html: []const u8,
+        expires_at: i64,
+    };
+
+    entries: std.StringHashMap(Entry),
+    mutex: std.Thread.Mutex,
+    allocator: std.mem.Allocator,
+
+    var instance: ?*ComponentCache = null;
+
+    pub fn init(allocator: std.mem.Allocator) *ComponentCache {
+        if (instance) |i| return i;
+
+        const cache = allocator.create(ComponentCache) catch @panic("OOM");
+        cache.* = .{
+            .entries = std.StringHashMap(Entry).init(allocator),
+            .mutex = .{},
+            .allocator = allocator,
+        };
+        instance = cache;
+        return cache;
+    }
+
+    pub fn global() ?*ComponentCache {
+        return instance;
+    }
+
+    pub fn get(self: *ComponentCache, key: []const u8) ?[]const u8 {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
+        if (self.entries.get(key)) |entry| {
+            const now = std.time.timestamp();
+            if (now < entry.expires_at) {
+                return entry.html;
+            }
+            // Expired - remove it
+            if (self.entries.fetchRemove(key)) |kv| {
+                self.allocator.free(kv.key);
+                self.allocator.free(kv.value.html);
+            }
+        }
+        return null;
+    }
+
+    pub fn put(self: *ComponentCache, key: []const u8, html: []const u8, ttl_seconds: u32) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
+        const now = std.time.timestamp();
+        const expires_at = now + @as(i64, @intCast(ttl_seconds));
+
+        // Copy key and html
+        const key_copy = self.allocator.dupe(u8, key) catch return;
+        const html_copy = self.allocator.dupe(u8, html) catch {
+            self.allocator.free(key_copy);
+            return;
+        };
+
+        // Remove old entry if exists
+        if (self.entries.fetchRemove(key)) |old| {
+            self.allocator.free(old.key);
+            self.allocator.free(old.value.html);
+        }
+
+        self.entries.put(key_copy, .{
+            .html = html_copy,
+            .expires_at = expires_at,
+        }) catch {
+            self.allocator.free(key_copy);
+            self.allocator.free(html_copy);
+        };
+    }
+};
 
 // HTML Tags
 const ElementTag = enum {
@@ -394,6 +471,8 @@ pub const Component = union(enum) {
         deinitFn: ?*const fn (propsPtr: ?*const anyopaque, allocator: Allocator) void,
         async_mode: BuiltinAttribute.Async = .sync,
         fallback: ?*const Component = null,
+        caching: ?BuiltinAttribute.Caching = null,
+        cache_key: ?[]const u8 = null,
 
         pub fn init(comptime func: anytype, allocator: Allocator, props: anytype) ComponentFn {
             const FuncInfo = @typeInfo(@TypeOf(func));
@@ -611,7 +690,49 @@ pub const Component = union(enum) {
                 }
             },
             .component_fn => |func| {
-                // Lazily invoke the component function and render its result
+                // Check for component-level caching
+                if (func.caching) |caching| {
+                    if (caching.seconds > 0) {
+                        // Generate cache key from function pointer + props pointer
+                        var key_buf: [64]u8 = undefined;
+                        const cache_key = if (func.cache_key) |ck|
+                            ck
+                        else blk: {
+                            const key_len = std.fmt.bufPrint(&key_buf, "cmp:{x}:{x}", .{
+                                @intFromPtr(func.callFn),
+                                @intFromPtr(func.propsPtr),
+                            }) catch break :blk null;
+                            break :blk key_buf[0..key_len.len];
+                        };
+
+                        if (cache_key) |key| {
+                            // Try to get from cache
+                            if (ComponentCache.global()) |cache| {
+                                if (cache.get(key)) |cached_html| {
+                                    try writer.writeAll(cached_html);
+                                    return;
+                                }
+
+                                // Render to buffer for caching
+                                var buf_writer = std.io.Writer.Allocating.init(func.allocator);
+                                const component = func.call() catch |err| {
+                                    std.debug.print("Error rendering component: {}\n", .{err});
+                                    return err;
+                                };
+                                try component.renderInner(&buf_writer.writer, options);
+
+                                const rendered = buf_writer.written();
+                                cache.put(key, rendered, caching.seconds);
+
+                                // Write to actual output
+                                try writer.writeAll(rendered);
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // No caching or cache miss - render directly
                 const component = func.call() catch |err| {
                     std.debug.print("Error rendering component: {}\n", .{err});
                     return err;
@@ -823,6 +944,7 @@ const ZxOptions = struct {
     rendering: ?BuiltinAttribute.Rendering = .server,
     async: ?BuiltinAttribute.Async = .sync,
     fallback: ?*const Component = null,
+    caching: ?BuiltinAttribute.Caching = null,
 };
 
 pub fn zx(tag: ElementTag, options: ZxOptions) Component {
@@ -1265,6 +1387,7 @@ pub const ZxContext = struct {
         // Apply builtin attributes from options
         comp_fn.async_mode = options.async orelse .sync;
         comp_fn.fallback = options.fallback;
+        comp_fn.caching = options.caching;
 
         return .{ .component_fn = comp_fn };
     }

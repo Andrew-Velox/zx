@@ -202,6 +202,9 @@ pub const Handler = struct {
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, meta: *App.Meta, cache_config: CacheConfig) !Handler {
+        // Initialize component-level cache
+        _ = zx.ComponentCache.init(allocator);
+
         return .{
             .meta = meta,
             .allocator = allocator,

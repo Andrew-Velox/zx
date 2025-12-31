@@ -72,6 +72,7 @@ pub const TestFileCache = struct {
         "component/csr_zig",
         "component/import",
         "component/root_cmp",
+        "component/caching",
 
         // Attribute
         "attribute/builtin",

@@ -1,21 +1,27 @@
 pub fn Page(ctx: zx.PageContext) zx.Component {
     const allocator = ctx.arena;
 
-    const time = std.time.timestamp();
-
     return (
         <div @allocator={allocator}>
             <h1>Time:</h1> 
-            <p>
-                {time}
-            </p>
+            <Time @caching="10s:time" />
         </div>
+    );
+}
+
+fn Time(allocator: zx.Allocator) zx.Component {
+    const time =  std.time.timestamp();
+
+    return (
+        <p @allocator={allocator}>
+            {time}
+        </p>
     );
 }
 
 pub const options = zx.PageOptions{
     .rendering = .server,
-    .caching = .tag("10s:time"),
+    // .caching = .tag("10s:time"),
 };
 
 const zx = @import("zx");

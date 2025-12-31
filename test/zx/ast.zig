@@ -328,6 +328,11 @@ test "component_root_cmp" {
     try test_render("component/root_cmp", @import("./../data/component/root_cmp.zig").Page);
 }
 
+test "component_caching" {
+    try test_transpile("component/caching");
+    try test_render("component/caching", @import("./../data/component/caching.zig").Page);
+}
+
 test "performance > transpile" {
     const MAX_TIME_MS = 50.0 * 8; // 50ms is on M1 Pro
     const MAX_TIME_PER_FILE_MS = 8.0 * 10; // 5ms is on M1 Pro
@@ -494,6 +499,7 @@ fn getPageFn(comptime path: []const u8) ?fn (std.mem.Allocator) zx.Component {
         .{ "component/csr_zig", @import("./../data/component/csr_zig.zig") },
         .{ "component/import", @import("./../data/component/import.zig") },
         .{ "component/root_cmp", @import("./../data/component/root_cmp.zig") },
+        .{ "component/caching", @import("./../data/component/caching.zig") },
         .{ "attribute/builtin", @import("./../data/attribute/builtin.zig") },
         .{ "attribute/component", @import("./../data/attribute/component.zig") },
         .{ "attribute/builtin_escaping", @import("./../data/attribute/builtin_escaping.zig") },

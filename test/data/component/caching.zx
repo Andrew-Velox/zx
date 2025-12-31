@@ -1,7 +1,7 @@
 pub fn Page(allocator: zx.Allocator) zx.Component {
     return (
         <main @allocator={allocator}>
-            <Button @caching={.tag("10s:button")} title="Custom Button" />
+            <Button @caching="10s:button" title="Custom Button" />
         </main>
     );
 }

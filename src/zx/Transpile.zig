@@ -1078,6 +1078,15 @@ fn writeComponentBuiltinOptions(self: *Ast, builtin_attrs: []const ZxAttribute, 
             try ctx.write(" .@\"async\" = ");
         } else if (std.mem.eql(u8, attr.name, "@fallback")) {
             try ctx.write(" .fallback = _zx.ptr(");
+        } else if (std.mem.eql(u8, attr.name, "@caching")) {
+            try ctx.write(" .caching = ");
+            // If it's a string value (not a zx_block), wrap with comptime .tag()
+            if (attr.zx_block_node == null) {
+                try ctx.write("comptime .tag(");
+                try ctx.writeM(attr.value, attr.value_byte_offset, self);
+                try ctx.write(")");
+                continue;
+            }
         } else {
             try ctx.write(" .");
             try ctx.write(attr.name[1..]); // Skip @ prefix
@@ -1851,11 +1860,17 @@ fn writeAttributes(self: *Ast, attributes: []const ZxAttribute, ctx: *TranspileC
 
         // @fallback={(<UserProfile user_id={0} />)}
         const is_fallback = std.mem.eql(u8, attr.name, "@fallback");
+        const is_caching = std.mem.eql(u8, attr.name, "@caching");
         if (is_fallback) try ctx.write("_zx.ptr(");
 
         // If value contains a zx_block, transpile it instead of writing raw text
         if (attr.zx_block_node) |zx_node| {
             try transpileBlock(self, zx_node, ctx);
+        } else if (is_caching) {
+            // String value for @caching - wrap with comptime .tag()
+            try ctx.write("comptime .tag(");
+            try ctx.writeM(attr.value, attr.value_byte_offset, self);
+            try ctx.write(")");
         } else {
             try ctx.writeM(attr.value, attr.value_byte_offset, self);
         }
