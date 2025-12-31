@@ -5,34 +5,42 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
         .{
             .allocator = allocator,
             .children = &.{
-                _zx.cmp(Wrapper, .{ .children = _zx.ele(.fragment, .{ .children = &.{
-                    _zx.ele(
-                        .p,
-                        .{
-                            .children = &.{
-                                _zx.txt("Wrapped content"),
+                _zx.cmp(
+                    Wrapper,
+                    .{},
+                    .{ .children = _zx.ele(.fragment, .{ .children = &.{
+                        _zx.ele(
+                            .p,
+                            .{
+                                .children = &.{
+                                    _zx.txt("Wrapped content"),
+                                },
                             },
-                        },
-                    ),
-                } }) }),
-                _zx.cmp(Container, .{ .children = _zx.ele(.fragment, .{ .children = &.{
-                    _zx.ele(
-                        .span,
-                        .{
-                            .children = &.{
-                                _zx.txt("First"),
+                        ),
+                    } }) },
+                ),
+                _zx.cmp(
+                    Container,
+                    .{},
+                    .{ .children = _zx.ele(.fragment, .{ .children = &.{
+                        _zx.ele(
+                            .span,
+                            .{
+                                .children = &.{
+                                    _zx.txt("First"),
+                                },
                             },
-                        },
-                    ),
-                    _zx.ele(
-                        .span,
-                        .{
-                            .children = &.{
-                                _zx.txt("Second"),
+                        ),
+                        _zx.ele(
+                            .span,
+                            .{
+                                .children = &.{
+                                    _zx.txt("Second"),
+                                },
                             },
-                        },
-                    ),
-                } }) }),
+                        ),
+                    } }) },
+                ),
             },
         },
     );

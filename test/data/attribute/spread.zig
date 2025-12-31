@@ -18,8 +18,16 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
                 _zx.attrSpr(form_attrs),
             }),
             .children = &.{
-                _zx.cmp(Input, input_props),
-                _zx.cmp(Input, _zx.propsM(input_props, .{ .extra = "override" })),
+                _zx.cmp(
+                    Input,
+                    .{},
+                    input_props,
+                ),
+                _zx.cmp(
+                    Input,
+                    .{},
+                    _zx.propsM(input_props, .{ .extra = "override" }),
+                ),
             },
         },
     );

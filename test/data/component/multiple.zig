@@ -5,11 +5,31 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
         .{
             .allocator = allocator,
             .children = &.{
-                _zx.cmp(Button, .{ .title = "Submit" }),
-                _zx.cmp(Button, .{ .title = "Cancel" }),
-                _zx.cmp(AsyncScore, .{ .index = 1, .label = "Score" }),
-                _zx.cmp(AsyncScore, .{ .index = 2, .label = "Points" }),
-                _zx.cmp(AsyncScore, .{ .index = 3, .label = "Rating" }),
+                _zx.cmp(
+                    Button,
+                    .{},
+                    .{ .title = "Submit" },
+                ),
+                _zx.cmp(
+                    Button,
+                    .{},
+                    .{ .title = "Cancel" },
+                ),
+                _zx.cmp(
+                    AsyncScore,
+                    .{},
+                    .{ .index = 1, .label = "Score" },
+                ),
+                _zx.cmp(
+                    AsyncScore,
+                    .{},
+                    .{ .index = 2, .label = "Points" },
+                ),
+                _zx.cmp(
+                    AsyncScore,
+                    .{},
+                    .{ .index = 3, .label = "Rating" },
+                ),
             },
         },
     );

@@ -6,8 +6,16 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
         .{
             .allocator = a,
             .children = &.{
-                _zx.cmp(ArgToBuiltin, .{}),
-                _zx.cmp(StructToBuiltin, .{}),
+                _zx.cmp(
+                    ArgToBuiltin,
+                    .{},
+                    .{},
+                ),
+                _zx.cmp(
+                    StructToBuiltin,
+                    .{},
+                    .{},
+                ),
             },
         },
     );

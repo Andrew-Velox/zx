@@ -63,7 +63,11 @@ pub fn StructCaptureToComponent(allocator: zx.Allocator) zx.Component {
                 _zx_for_blk_2: {
                     const __zx_children_2 = _zx.getAlloc().alloc(zx.Component, users.len) catch unreachable;
                     for (users, 0..) |user, _zx_i_2| {
-                        __zx_children_2[_zx_i_2] = _zx.cmp(UserComponent, .{ .name = user.name, .age = user.age });
+                        __zx_children_2[_zx_i_2] = _zx.cmp(
+                            UserComponent,
+                            .{},
+                            .{ .name = user.name, .age = user.age },
+                        );
                     }
                     break :_zx_for_blk_2 _zx.ele(.fragment, .{ .children = __zx_children_2 });
                 },

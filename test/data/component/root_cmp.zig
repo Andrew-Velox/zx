@@ -1,6 +1,10 @@
 pub fn Page(allocator: zx.Allocator) zx.Component {
     var _zx = zx.allocInit(allocator);
-    return _zx.cmp(Button, .{});
+    return _zx.cmp(
+        Button,
+        .{},
+        .{},
+    );
 }
 
 pub fn Button(allocator: zx.Allocator) zx.Component {

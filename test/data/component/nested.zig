@@ -5,9 +5,17 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
         .{
             .allocator = allocator,
             .children = &.{
-                _zx.cmp(Card, .{ .title = "Welcome", .children = _zx.ele(.fragment, .{ .children = &.{
-                    _zx.cmp(Button, .{ .label = "Click me" }),
-                } }) }),
+                _zx.cmp(
+                    Card,
+                    .{},
+                    .{ .title = "Welcome", .children = _zx.ele(.fragment, .{ .children = &.{
+                        _zx.cmp(
+                            Button,
+                            .{},
+                            .{ .label = "Click me" },
+                        ),
+                    } }) },
+                ),
             },
         },
     );

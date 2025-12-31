@@ -938,7 +938,7 @@ fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: 
 
         try ctx.write(" })");
     } else {
-        // Regular cmp component
+        // Regular cmp component: _zx.cmp(Func, .{ options }, .{ props })
         try ctx.writeM("_zx.cmp", node.startByte(), self);
         try ctx.write("(");
         try ctx.write(tag);
@@ -948,9 +948,15 @@ fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: 
         defer spreads.deinit(ctx.output.allocator);
         var regular_props = std.ArrayList(ZxAttribute){};
         defer regular_props.deinit(ctx.output.allocator);
+        var builtin_attrs = std.ArrayList(ZxAttribute){};
+        defer builtin_attrs.deinit(ctx.output.allocator);
 
         for (attributes) |attr| {
-            if (attr.is_builtin) continue;
+            if (attr.is_builtin) {
+                // Collect builtin attributes for the options parameter
+                try builtin_attrs.append(ctx.output.allocator, attr);
+                continue;
+            }
             if (attr.is_spread) {
                 try spreads.append(ctx.output.allocator, attr);
             } else {
@@ -962,10 +968,14 @@ fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: 
         const has_regular_props = regular_props.items.len > 0;
         const has_children = children.len > 0;
 
+        // Write options parameter first (builtin attributes)
+        try ctx.write(".{");
+        try writeComponentBuiltinOptions(self, builtin_attrs.items, ctx);
+        try ctx.write(" }, ");
+
         // Case 1: Single spread
         if (spreads.items.len == 1 and !has_regular_props and !has_children) {
             try ctx.writeM(spreads.items[0].value, spreads.items[0].value_byte_offset, self);
-            try ctx.write(")");
         }
         // Case 2: Multiple spreads with other props or children - use propsM
         else if (has_spread) {
@@ -1014,7 +1024,6 @@ fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: 
             }
 
             if (need_merge) try ctx.write(")");
-            try ctx.write(")");
         }
         // Case 3: Regular attrs
         else {
@@ -1045,7 +1054,46 @@ fn writeCustomComponent(self: *Ast, node: ts.Node, tag: []const u8, attributes: 
                 try writeChildrenValue(self, children, ctx);
             }
 
-            try ctx.write(" })");
+            try ctx.write(" }");
+        }
+
+        try ctx.write(",)");
+    }
+}
+
+/// Write builtin options for component (cmp) calls
+fn writeComponentBuiltinOptions(self: *Ast, builtin_attrs: []const ZxAttribute, ctx: *TranspileContext) !void {
+    var first = true;
+    for (builtin_attrs) |attr| {
+        // Skip @rendering which is handled separately for CSR components
+        if (std.mem.eql(u8, attr.name, "@rendering")) continue;
+        // Skip @allocator which is not relevant for components
+        if (std.mem.eql(u8, attr.name, "@allocator")) continue;
+
+        if (!first) try ctx.write(",");
+        first = false;
+
+        // Map attribute names to Zig field names
+        if (std.mem.eql(u8, attr.name, "@async")) {
+            try ctx.write(" .@\"async\" = ");
+        } else if (std.mem.eql(u8, attr.name, "@fallback")) {
+            try ctx.write(" .fallback = _zx.ptr(");
+        } else {
+            try ctx.write(" .");
+            try ctx.write(attr.name[1..]); // Skip @ prefix
+            try ctx.write(" = ");
+        }
+
+        // Write the value
+        if (attr.zx_block_node) |zx_node| {
+            try transpileBlock(self, zx_node, ctx);
+        } else {
+            try ctx.writeM(attr.value, attr.value_byte_offset, self);
+        }
+
+        // Close the ptr() wrapper for @fallback
+        if (std.mem.eql(u8, attr.name, "@fallback")) {
+            try ctx.write(")");
         }
     }
 }

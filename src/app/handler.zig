@@ -189,7 +189,7 @@ const PageCache = struct {
         if (req.route_data) |rd| {
             const route: *const App.Meta.Route = @ptrCast(@alignCast(rd));
             if (route.page_opts) |options| {
-                return options.caching.getSeconds();
+                return options.caching.seconds;
             }
         }
         return null;

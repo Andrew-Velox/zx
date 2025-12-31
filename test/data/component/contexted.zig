@@ -5,26 +5,34 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
         .{
             .allocator = allocator,
             .children = &.{
-                _zx.cmp(Wrapper, .{ .children = _zx.ele(.fragment, .{ .children = &.{
-                    _zx.ele(
-                        .p,
-                        .{
-                            .children = &.{
-                                _zx.txt("Wrapped content"),
+                _zx.cmp(
+                    Wrapper,
+                    .{},
+                    .{ .children = _zx.ele(.fragment, .{ .children = &.{
+                        _zx.ele(
+                            .p,
+                            .{
+                                .children = &.{
+                                    _zx.txt("Wrapped content"),
+                                },
                             },
-                        },
-                    ),
-                } }) }),
-                _zx.cmp(Card, .{ .children = _zx.ele(.fragment, .{ .children = &.{
-                    _zx.ele(
-                        .span,
-                        .{
-                            .children = &.{
-                                _zx.txt("Card content"),
+                        ),
+                    } }) },
+                ),
+                _zx.cmp(
+                    Card,
+                    .{},
+                    .{ .children = _zx.ele(.fragment, .{ .children = &.{
+                        _zx.ele(
+                            .span,
+                            .{
+                                .children = &.{
+                                    _zx.txt("Card content"),
+                                },
                             },
-                        },
-                    ),
-                } }) }),
+                        ),
+                    } }) },
+                ),
             },
         },
     );

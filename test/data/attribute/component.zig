@@ -17,15 +17,23 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
         .{
             .allocator = allocator,
             .children = &.{
-                _zx.cmp(ChildComponent, .{ .children = hello_child }),
-                _zx.cmp(ChildComponent, .{ .children = _zx.ele(
-                    .div,
-                    .{
-                        .children = &.{
-                            _zx.txt("Hello!"),
+                _zx.cmp(
+                    ChildComponent,
+                    .{},
+                    .{ .children = hello_child },
+                ),
+                _zx.cmp(
+                    ChildComponent,
+                    .{},
+                    .{ .children = _zx.ele(
+                        .div,
+                        .{
+                            .children = &.{
+                                _zx.txt("Hello!"),
+                            },
                         },
-                    },
-                ) }),
+                    ) },
+                ),
             },
         },
     );

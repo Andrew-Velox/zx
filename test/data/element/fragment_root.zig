@@ -5,7 +5,11 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
         .{
             .allocator = allocator,
             .children = &.{
-                _zx.cmp(FragmentComponent, .{}),
+                _zx.cmp(
+                    FragmentComponent,
+                    .{},
+                    .{},
+                ),
             },
         },
     );

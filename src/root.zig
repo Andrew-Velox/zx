@@ -392,6 +392,8 @@ pub const Component = union(enum) {
         callFn: *const fn (propsPtr: ?*const anyopaque, allocator: Allocator) anyerror!Component,
         allocator: Allocator,
         deinitFn: ?*const fn (propsPtr: ?*const anyopaque, allocator: Allocator) void,
+        async_mode: BuiltinAttribute.Async = .sync,
+        fallback: ?*const Component = null,
 
         pub fn init(comptime func: anytype, allocator: Allocator, props: anytype) ComponentFn {
             const FuncInfo = @typeInfo(@TypeOf(func));
@@ -1242,7 +1244,7 @@ pub const ZxContext = struct {
         return result;
     }
 
-    pub fn cmp(self: *ZxContext, comptime func: anytype, props: anytype) Component {
+    pub fn cmp(self: *ZxContext, comptime func: anytype, options: ZxOptions, props: anytype) Component {
         const allocator = self.getAlloc();
         const FuncInfo = @typeInfo(@TypeOf(func));
         const param_count = FuncInfo.@"fn".params.len;
@@ -1252,13 +1254,19 @@ pub const ZxContext = struct {
             @hasField(@typeInfo(FirstPropType).pointer.child, "children");
 
         // Context-based component or function with props parameter
-        if (first_is_ctx_ptr or param_count == 2) {
+        var comp_fn = if (first_is_ctx_ptr or param_count == 2) blk: {
             const PropsType = if (first_is_ctx_ptr) @TypeOf(props) else FuncInfo.@"fn".params[1].type.?;
             const coerced_props = coerceProps(PropsType, props);
-            return .{ .component_fn = Component.ComponentFn.init(func, allocator, coerced_props) };
-        } else {
-            return .{ .component_fn = Component.ComponentFn.init(func, allocator, props) };
-        }
+            break :blk Component.ComponentFn.init(func, allocator, coerced_props);
+        } else blk: {
+            break :blk Component.ComponentFn.init(func, allocator, props);
+        };
+
+        // Apply builtin attributes from options
+        comp_fn.async_mode = options.async orelse .sync;
+        comp_fn.fallback = options.fallback;
+
+        return .{ .component_fn = comp_fn };
     }
 
     /// Allocates a Component and returns a pointer to it (used for @fallback)
@@ -1486,85 +1494,61 @@ pub const BuiltinAttribute = struct {
         stream,
     };
 
-    pub const Caching = union(enum) {
-        none,
+    pub const Caching = struct {
+        pub const none = Caching{ .seconds = 0 };
+
+        /// The number of seconds to cache the page for
         seconds: u32,
+        /// The key to cache the page for
+        key: ?[]const u8 = null,
 
-        /// Example:
+        /// Examples:
         ///
-        /// `5s` -> .{ .seconds = 5 }
+        /// - `10s` → `{ .seconds = 10, .key = null }`
+        /// - `5m` → `{ .seconds = 300, .key = null }`
+        /// - `1h` → `{ .seconds = 3600, .key = null }`
+        /// - `1d` → `{ .seconds = 86400, .key = null }`
         ///
-        /// `10m` -> .{ .seconds = 600 }
-        ///
-        /// `1h` -> .{ .seconds = 3600 }
-        ///
-        /// `1y` -> .{ .seconds = 31536000 }
-        tag: []const u8,
-
-        /// Get caching duration in seconds
-        /// Examples: "10s" -> 10, "5m" -> 300, "1h" -> 3600, "1d" -> 86400
-        pub fn getSeconds(self: Caching) ?u32 {
-            switch (self) {
-                .seconds => |seconds| return seconds,
-                .tag => |tag| return parseTagRuntime(tag),
-                .none => return null,
-            }
-        }
-
-        /// Comptime version for compile-time validation
-        pub fn getSecondsComptime(comptime self: Caching) comptime_int {
-            return comptime switch (self) {
-                .seconds => |seconds| seconds,
-                .tag => |tag| parseTagComptime(tag),
-                .none => 0,
-            };
-        }
-
-        fn parseTagRuntime(tag: []const u8) u32 {
-            var num_end: usize = 0;
-            while (num_end < tag.len) : (num_end += 1) {
-                const c = tag[num_end];
-                if (!std.ascii.isDigit(c)) break;
-            }
-            if (num_end == 0) return 0;
-
-            const num_str = tag[0..num_end];
-            const unit_str = tag[num_end..];
-
-            const num_value = std.fmt.parseInt(u32, num_str, 10) catch return 0;
-            const unit_value = parseUnitRuntime(unit_str);
-
-            return num_value * unit_value;
-        }
-
-        fn parseTagComptime(comptime tag: []const u8) comptime_int {
+        /// With key:
+        /// - `10s:key` → `{ .seconds = 10, .key = "key" }`
+        /// - `5m:key` → `{ .seconds = 300, .key = "key" }`
+        /// - `1h:key` → `{ .seconds = 3600, .key = "key" }`
+        /// - `1d:key` → `{ .seconds = 86400, .key = "key" }`
+        pub fn tag(comptime tag_str: []const u8) Caching {
             comptime {
                 var num_end: usize = 0;
-                while (num_end < tag.len) : (num_end += 1) {
-                    const c = tag[num_end];
+                while (num_end < tag_str.len) : (num_end += 1) {
+                    const c = tag_str[num_end];
                     if (!std.ascii.isDigit(c)) break;
                 }
-                if (num_end == 0) @compileError("Invalid caching tag '" ++ tag ++ "': no number found");
+                if (num_end == 0) @compileError("Invalid caching tag '" ++ tag_str ++ "': no number found");
 
-                const num_str = tag[0..num_end];
-                const unit_str = tag[num_end..];
+                const num_str = tag_str[0..num_end];
+                const rest = tag_str[num_end..];
+
+                var unit_end: usize = 0;
+                var key: ?[]const u8 = null;
+                for (rest, 0..) |c, i| {
+                    if (c == ':') {
+                        unit_end = i;
+                        key = rest[i + 1 ..];
+                        break;
+                    }
+                } else {
+                    unit_end = rest.len;
+                }
+                const unit_str = rest[0..unit_end];
 
                 const num_value = std.fmt.parseInt(u64, num_str, 10) catch @compileError("Invalid caching number '" ++ num_str ++ "'");
-                const unit_value = parseUnitComptime(unit_str);
+                const unit_value = parseUnit(unit_str);
 
-                return num_value * unit_value;
+                const seconds = num_value * unit_value;
+
+                return .{ .seconds = seconds, .key = key };
             }
         }
 
-        fn parseUnitRuntime(unit: []const u8) u32 {
-            if (std.mem.eql(u8, unit, "s") or unit.len == 0) return 1;
-            if (std.mem.eql(u8, unit, "m")) return std.time.s_per_min;
-            if (std.mem.eql(u8, unit, "h")) return std.time.s_per_hour;
-            if (std.mem.eql(u8, unit, "d")) return std.time.s_per_day;
-            return 1; // default to seconds
-        }
-
-        fn parseUnitComptime(comptime unit: []const u8) comptime_int {
+        fn parseUnit(comptime unit: []const u8) comptime_int {
             if (std.mem.eql(u8, unit, "s") or unit.len == 0) return 1;
             if (std.mem.eql(u8, unit, "m")) return std.time.s_per_min;
             if (std.mem.eql(u8, unit, "h")) return std.time.s_per_hour;

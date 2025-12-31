@@ -5,18 +5,30 @@ pub fn Page(allocator: zx.Allocator) zx.Component {
         .{
             .allocator = allocator,
             .children = &.{
-                _zx.cmp(Button, .{ .title = "Click me" }),
-                _zx.cmp(Alert, .{ .message = "This is an alert", .level = "warning" }),
-                _zx.cmp(Panel, .{ .title = "Panel Title", .children = _zx.ele(.fragment, .{ .children = &.{
-                    _zx.ele(
-                        .p,
-                        .{
-                            .children = &.{
-                                _zx.txt("Panel content here"),
+                _zx.cmp(
+                    Button,
+                    .{},
+                    .{ .title = "Click me" },
+                ),
+                _zx.cmp(
+                    Alert,
+                    .{},
+                    .{ .message = "This is an alert", .level = "warning" },
+                ),
+                _zx.cmp(
+                    Panel,
+                    .{},
+                    .{ .title = "Panel Title", .children = _zx.ele(.fragment, .{ .children = &.{
+                        _zx.ele(
+                            .p,
+                            .{
+                                .children = &.{
+                                    _zx.txt("Panel content here"),
+                                },
                             },
-                        },
-                    ),
-                } }) }),
+                        ),
+                    } }) },
+                ),
             },
         },
     );
