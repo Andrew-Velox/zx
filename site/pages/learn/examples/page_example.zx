@@ -3,7 +3,7 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
         <main @allocator={ctx.arena}>
             <h1>About Us</h1>
             <p>Welcome to our website!</p>
-            <p>Path: {ctx.request.url.path}</p>
+            <p>Path: {ctx.request.pathname}</p>
         </main>
     );
 }

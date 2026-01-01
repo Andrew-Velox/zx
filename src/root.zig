@@ -1788,3 +1788,6 @@ const ClientComponentOptions = struct {
     path: []const u8,
     id: []const u8,
 };
+pub const Headers = @import("app/Headers.zig");
+pub const Request = @import("app/Request.zig");
+pub const Response = @import("app/Response.zig");

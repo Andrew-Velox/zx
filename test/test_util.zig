@@ -165,6 +165,18 @@ pub const TestFileCache = struct {
     }
 };
 
+pub fn shouldRunSlowTest() bool {
+    const allocator = std.testing.allocator;
+
+    // E2E environment variable is set
+    const slow_tests = std.process.getEnvVarOwned(allocator, "E2E") catch {
+        return false;
+    };
+
+    defer allocator.free(slow_tests);
+    return true;
+}
+
 const std = @import("std");
 const testing = std.testing;
 const zx = @import("zx");

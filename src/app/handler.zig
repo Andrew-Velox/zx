@@ -690,7 +690,7 @@ pub const Handler = struct {
                     try self.renderStreaming(res, &page_component, pagectx.arena);
                 } else {
                     // Normal mode: render everything at once
-                    const writer = &layoutctx.response.buffer.writer;
+                    const writer = &layoutctx.response.inner.buffer.writer;
                     _ = writer.write("<!DOCTYPE html>\n") catch |err| {
                         std.debug.print("Error writing HTML: {}\n", .{err});
                         break :blk;

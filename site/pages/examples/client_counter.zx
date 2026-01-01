@@ -1,5 +1,5 @@
-var count = zx.Signal(i32).init(0);
-var doubled = zx.Computed(i32, i32).init(&count, doubleValue);
+var count: zx.Signal(i32) = .init(0);
+var doubled: zx.Computed(i32, i32) = .init(&count, doubleValue);
 
 pub fn CounterComponent(allocator: zx.Allocator) zx.Component {
     return (

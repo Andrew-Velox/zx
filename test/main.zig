@@ -4,6 +4,9 @@ test {
     _ = @import("zx/ast.zig");
     _ = @import("cli/fmt.zig");
     _ = @import("cli/cli.zig");
+    _ = @import("app/headers.zig");
+    _ = @import("app/request.zig");
+    _ = @import("app/response.zig");
 }
 
 pub const std_options = std.Options{

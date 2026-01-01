@@ -334,6 +334,7 @@ test "component_caching" {
 }
 
 test "performance > transpile" {
+    if (!test_util.shouldRunSlowTest()) return;
     const MAX_TIME_MS = 50.0 * 8; // 50ms is on M1 Pro
     const MAX_TIME_PER_FILE_MS = 8.0 * 10; // 5ms is on M1 Pro
 
@@ -586,7 +587,8 @@ var test_file_cache: ?TestFileCache = null;
 var gpa_state: ?std.heap.GeneralPurposeAllocator(.{}) = null;
 
 const native_os = @import("builtin").os.tag;
-const TestFileCache = @import("./../test_util.zig").TestFileCache;
+const test_util = @import("./../test_util.zig");
+const TestFileCache = test_util.TestFileCache;
 
 const std = @import("std");
 const testing = std.testing;
