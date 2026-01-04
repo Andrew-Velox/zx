@@ -1,4 +1,5 @@
 test "init" {
+    if (!test_util.shouldRunSlowTest()) return error.SkipZigTest;
     try test_cmd(.{
         .args = &.{"init"},
         .expected_exit_code = 0,
@@ -22,6 +23,7 @@ test "init" {
 }
 
 test "init → init" {
+    if (!test_util.shouldRunSlowTest()) return error.SkipZigTest;
     try test_cmd(.{
         .args = &.{"init"},
         .expected_exit_code = 0,
@@ -32,6 +34,7 @@ test "init → init" {
 }
 
 test "init --force" {
+    if (!test_util.shouldRunSlowTest()) return error.SkipZigTest;
     try test_cmd(.{
         .args = &.{ "init", "--force" },
         .expected_exit_code = 0,
@@ -52,6 +55,7 @@ test "init --force" {
 }
 
 test "init -t react" {
+    if (!test_util.shouldRunSlowTest()) return error.SkipZigTest;
     try test_cmd(.{
         .args = &.{ "init", "react", "--template", "react" },
         .expected_exit_code = 0,
@@ -137,7 +141,7 @@ test "init -t react" {
 // }
 
 test "init → build" {
-    if (!sholdRunSlowTest()) return error.SkipZigTest;
+    if (!test_util.shouldRunSlowTest()) return error.SkipZigTest;
 
     const test_dir_abs = try getTestDirPath();
     defer allocator.free(test_dir_abs);
@@ -155,7 +159,7 @@ test "init → build" {
 }
 
 test "export" {
-    if (builtin.os.tag == .windows or !sholdRunSlowTest()) return error.SkipZigTest; // Export doesn't work on Windows yet
+    if (builtin.os.tag == .windows or !test_util.shouldRunSlowTest()) return error.SkipZigTest; // Export doesn't work on Windows yet
     try test_cmd(.{
         .args = &.{"export"},
         .expected_exit_code = 0,
@@ -177,7 +181,7 @@ test "export" {
 }
 
 test "bundle" {
-    if (!sholdRunSlowTest()) return error.SkipZigTest;
+    if (!test_util.shouldRunSlowTest()) return error.SkipZigTest;
     try test_cmd(.{
         .args = &.{"bundle"},
         .expected_exit_code = 0,
@@ -197,7 +201,7 @@ test "bundle" {
 }
 
 test "bundle --docker" {
-    if (!sholdRunSlowTest()) return error.SkipZigTest;
+    if (!test_util.shouldRunSlowTest()) return error.SkipZigTest;
     try test_cmd(.{
         .args = &.{ "bundle", "--docker" },
         .expected_exit_code = 0,
@@ -217,7 +221,7 @@ test "bundle --docker" {
 }
 
 test "bundle --docker-compose" {
-    if (!sholdRunSlowTest()) return error.SkipZigTest;
+    if (!test_util.shouldRunSlowTest()) return error.SkipZigTest;
     try test_cmd(.{
         .args = &.{ "bundle", "--docker-compose" },
         .expected_exit_code = 0,
@@ -344,16 +348,6 @@ test "tests:afterAll" {
     // std.fs.cwd().deleteTree("test/tmp") catch {};
 }
 
-fn sholdRunSlowTest() bool {
-    // E2E environment variable is set
-    const slow_tests = std.process.getEnvVarOwned(allocator, "E2E") catch {
-        return false;
-    };
-
-    defer allocator.free(slow_tests);
-    return true;
-}
-
 fn getZxPath() ![]const u8 {
     const zx_bin_rel = if (builtin.os.tag == .windows) "zig-out/bin/zx.exe" else "zig-out/bin/zx";
     const zx_bin_abs = try std.fs.cwd().realpathAlloc(allocator, zx_bin_rel);
@@ -397,6 +391,7 @@ fn killPort(port: []const u8) !void {
 }
 
 const allocator = std.testing.allocator;
+const test_util = @import("./../test_util.zig");
 
 const std = @import("std");
 const builtin = @import("builtin");

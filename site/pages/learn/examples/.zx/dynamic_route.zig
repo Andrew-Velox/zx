@@ -1,6 +1,6 @@
 // site/pages/user/[id]/page.zx
 pub fn UserProfile(ctx: zx.PageContext) zx.Component {
-    const user_id = ctx.request.param("id") orelse "unknown";
+    const user_id = ctx.request.getParam("id") orelse "unknown";
 
     var _zx = zx.allocInit(ctx.arena);
     return _zx.ele(

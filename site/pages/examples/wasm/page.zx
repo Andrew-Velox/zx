@@ -1,5 +1,6 @@
 pub fn Page(ctx: zx.PageContext) zx.Component {
     const allocator = ctx.arena;
+
     return (
         <div @allocator={allocator} class="todo-container">
             <TodoApp @rendering={.client} />
@@ -8,6 +9,29 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
                 {@embedFile("style.css")}
             </style>
             <script type="module" src="/assets/main.js" />
+        </div>
+    );
+}
+
+pub const CounterPage = @import("./simple/page.zx").Page;
+
+fn Counter(allocator: zx.Allocator) zx.Component {
+    const ctx = zx.PageContext{
+        .request = .{
+            .url = "",
+            .method = .GET,
+            .pathname = "",
+            .headers = .{},
+            .arena = allocator,
+        },
+        .response = .{ .arena = allocator },
+        .allocator = allocator,
+        .arena = allocator,
+    };
+    const counter_page = CounterPage(ctx);
+    return (
+        <div @allocator={allocator}>
+            {counter_page}
         </div>
     );
 }
@@ -22,6 +46,7 @@ pub fn TodoApp(allocator: zx.Allocator) zx.Component {
         <div @allocator={allocator} class="todo-app">
             <div class="todo-header">
                 <h1 class="todo-title">ZX + WASM</h1>
+                <Counter />
                 <p class="todo-subtitle">A demo todo app built with ZX Client Side Rendering</p>
             </div>
 

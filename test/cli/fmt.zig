@@ -279,7 +279,7 @@ test "zx_comments" {
 }
 
 test "performance > fmt" {
-    // if (true) return error.Todo;
+    if (!shouldRunSlowTest()) return;
     const MAX_TIME_MS = 50.0 * 8; // 50ms is on M1 Pro
     const MAX_TIME_PER_FILE_MS = 8.0 * 10; // 5ms is on M1 Pro
 
@@ -349,8 +349,9 @@ fn expectLessThan(expected: f64, actual: f64) !void {
 
 var test_file_cache: ?TestFileCache = null;
 var gpa_state: ?std.heap.GeneralPurposeAllocator(.{}) = null;
-
-const TestFileCache = @import("./../test_util.zig").TestFileCache;
+const test_util = @import("./../test_util.zig");
+const TestFileCache = test_util.TestFileCache;
+const shouldRunSlowTest = test_util.shouldRunSlowTest;
 
 const std = @import("std");
 const testing = std.testing;

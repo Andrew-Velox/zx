@@ -281,7 +281,9 @@ pub const Handler = struct {
         res.status = 404;
         res.content_type = .HTML;
 
-        const notfoundctx = zx.NotFoundContext.init(req, res, self.allocator);
+        const abstract_req = httpz_adapter.createRequest(req);
+        const abstract_res = httpz_adapter.createResponse(res, req.arena);
+        const notfoundctx = zx.NotFoundContext.init(abstract_req, abstract_res, self.allocator);
 
         // First try to get notfound from route_data if available
         var notfound_fn: ?*const fn (zx.NotFoundContext) Component = null;
@@ -317,7 +319,9 @@ pub const Handler = struct {
         res.status = 500;
         res.content_type = .HTML;
 
-        const errorctx = zx.ErrorContext.init(req, res, self.allocator, err);
+        const abstract_req = httpz_adapter.createRequest(req);
+        const abstract_res = httpz_adapter.createResponse(res, req.arena);
+        const errorctx = zx.ErrorContext.init(abstract_req, abstract_res, self.allocator, err);
 
         // Find the closest route with error handler
         var error_fn: ?*const fn (zx.ErrorContext) Component = null;
@@ -352,7 +356,9 @@ pub const Handler = struct {
         opts: RenderErrorPageOptions,
     ) void {
         const path = req.url.path;
-        const layoutctx = zx.LayoutContext.init(req, res, self.allocator);
+        const abstract_req = httpz_adapter.createRequest(req);
+        const abstract_res = httpz_adapter.createResponse(res, req.arena);
+        const layoutctx = zx.LayoutContext.init(abstract_req, abstract_res, self.allocator);
         const is_dev_mode = self.meta.cli_command == .dev;
 
         var component = page_component;
@@ -564,8 +570,10 @@ pub const Handler = struct {
             }
         }
 
-        const pagectx = zx.PageContext.init(req, res, allocator);
-        const layoutctx = zx.LayoutContext.init(req, res, allocator);
+        const abstract_req = httpz_adapter.createRequest(req);
+        const abstract_res = httpz_adapter.createResponse(res, req.arena);
+        const pagectx = zx.PageContext.init(abstract_req, abstract_res, allocator);
+        const layoutctx = zx.LayoutContext.init(abstract_req, abstract_res, allocator);
 
         // log.debug("cli command: {s}", .{@tagName(meta.cli_command orelse .serve)});
 
@@ -690,7 +698,7 @@ pub const Handler = struct {
                     try self.renderStreaming(res, &page_component, pagectx.arena);
                 } else {
                     // Normal mode: render everything at once
-                    const writer = &layoutctx.response.buffer.writer;
+                    const writer = &res.buffer.writer;
                     _ = writer.write("<!DOCTYPE html>\n") catch |err| {
                         std.debug.print("Error writing HTML: {}\n", .{err});
                         break :blk;
@@ -908,8 +916,11 @@ const std = @import("std");
 const builtin = @import("builtin");
 const cachez = @import("cachez");
 const zx = @import("../root.zig");
+const httpz_adapter = @import("adapter.zig");
 
 const Allocator = std.mem.Allocator;
 const Component = zx.Component;
 const Printer = zx.Printer;
 const App = zx.App;
+const Request = @import("Request.zig");
+const Response = @import("Response.zig");

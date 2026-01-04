@@ -16,7 +16,7 @@ const RequestInfo = struct {
 
 pub fn handleRequest(ctx: zx.PageContext) RequestInfo {
     // const fd = ctx.request.formData() catch @panic("OOM");
-    const qs = ctx.request.query() catch @panic("OOM");
+    const qs = ctx.request.searchParams;
 
     const is_reset = qs.get("reset") != null;
     const is_delete = qs.get("delete") != null;
@@ -42,7 +42,7 @@ pub fn handleRequest(ctx: zx.PageContext) RequestInfo {
     const filtered_users = filterUsers(ctx.arena, search_opt);
 
     if (is_delete or is_add or is_reset) {
-        ctx.response.header("Location", "/examples/form");
+        ctx.response.setHeader("Location", "/examples/form");
         ctx.response.setStatus(.found);
     }
 

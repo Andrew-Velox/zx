@@ -1,10 +1,24 @@
 pub fn Layout(ctx: zx.LayoutContext, children: zx.Component) zx.Component {
+    const path = ctx.request.pathname;
     const description = "A full-stack web framework for Zig. Write declarative UI components using familiar JSX patterns, transpiled to efficient Zig code.";
     const title = "ZX - Full-Stack Web Framework for Zig";
     const site_url = "https://ziex.dev";
     const keywords = "zig, zx, web framework, jsx, full-stack, ssr, ssg, wasm, components, server-side rendering, static site generation";
     const js_href = std.fmt.allocPrint(ctx.arena, "/assets/docs.js?v={s}", .{zx.info.version_string}) catch unreachable;
-    const needs_js = !std.mem.eql(u8, ctx.request.url.path, "/");
+    const needs_js = !std.mem.eql(u8, path, "/");
+
+    if (std.mem.eql(u8, path, "/overview") or std.mem.eql(u8, path, "/time")) {
+        return (
+            <html lang="en" @allocator={ctx.arena}>
+                <head>
+                    <title>{title}</title>
+                </head>
+                <body>
+                    {children}
+                </body>
+            </html>
+        );
+    }
 
     return (
         <html lang="en" @allocator={ctx.arena}>
@@ -13,7 +27,7 @@ pub fn Layout(ctx: zx.LayoutContext, children: zx.Component) zx.Component {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
                 <title>{title}</title>
-                <meta name="description" content={description} />
+
                 <meta name="keywords" content={keywords} />
                 <meta name="author" content="Nurul Huda" />
                 <meta name="robots" content="index, follow" />
@@ -48,9 +62,13 @@ pub fn Layout(ctx: zx.LayoutContext, children: zx.Component) zx.Component {
 }
 
 fn getCss(ctx: zx.LayoutContext) []const u8 {
-    const path = ctx.request.url.path;
-    return if (std.mem.eql(u8, path, "/"))
+    const req_path = ctx.request.pathname;
+    return if (std.mem.eql(u8, req_path, "/"))
         @embedFile("../assets/home.css")
+    else if (std.mem.eql(u8, req_path, "/overview"))
+        ""
+    else if (std.mem.eql(u8, req_path, "/time"))
+        ""
     else
         @embedFile("../assets/docs.css");
 }
