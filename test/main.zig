@@ -7,6 +7,8 @@ test {
     _ = @import("app/headers.zig");
     _ = @import("app/request.zig");
     _ = @import("app/response.zig");
+    _ = @import("app/common.zig");
+    _ = @import("app/routing.zig");
 }
 
 pub const std_options = std.Options{

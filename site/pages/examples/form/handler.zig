@@ -43,7 +43,7 @@ pub fn handleRequest(ctx: zx.PageContext) RequestInfo {
 
     if (is_delete or is_add or is_reset) {
         ctx.response.setHeader("Location", "/examples/form");
-        ctx.response.setHttpStatus(.found);
+        ctx.response.setStatus(.found);
     }
 
     return RequestInfo{

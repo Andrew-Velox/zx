@@ -1,90 +1,162 @@
-const std = @import("std");
-const httpz = @import("httpz");
+//! MDN Web API compliant Headers abstraction.
+//! This module is backend-agnostic. The actual implementation is provided via vtable.
+//! https://developer.mozilla.org/en-US/docs/Web/API/Headers
 
-/// MDN Web API compliant Headers wrapper.
-/// https://developer.mozilla.org/en-US/docs/Web/API/Headers
+const std = @import("std");
+const common = @import("common.zig");
+
 pub const Headers = @This();
 
-response: ?*httpz.Response = null,
-request: ?*httpz.Request = null,
+// Re-export types from std.http
+pub const Header = common.Header;
+/// @deprecated Use `Header` instead.
+pub const Entry = Header;
 
-/// Creates a read-write Headers wrapper from an httpz Response.
-pub fn fromResponse(response: *httpz.Response) Headers {
-    return .{ .response = response };
-}
+/// HTTP header iterator for parsing raw header bytes.
+/// Re-exported from std.http.HeaderIterator for convenience.
+///
+/// This is useful when you have raw HTTP protocol bytes and need to parse headers.
+/// For iterating over headers from a backend, use the `entries()` method which
+/// returns the vtable-based `Iterator`.
+///
+/// [Zig std.http Reference](https://ziglang.org/documentation/master/std/#std.http.HeaderIterator)
+pub const HeaderIterator = std.http.HeaderIterator;
 
-/// Creates a read-only Headers wrapper from an httpz Request.
-pub fn fromRequest(request: *httpz.Request) Headers {
-    return .{ .request = request };
-}
+// --- Headers Data --- //
+
+/// Backend-specific context pointer (null for WASM/client-side)
+backend_ctx: ?*anyopaque = null,
+
+/// VTable for backend-specific operations
+vtable: ?*const VTable = null,
+
+/// Whether this Headers instance is read-only (from request)
+read_only: bool = true,
+
+pub const VTable = struct {
+    get: *const fn (ctx: *anyopaque, name: []const u8) ?[]const u8,
+    has: *const fn (ctx: *anyopaque, name: []const u8) bool,
+    set: *const fn (ctx: *anyopaque, name: []const u8, value: []const u8) void,
+    append: *const fn (ctx: *anyopaque, name: []const u8, value: []const u8) void,
+    iterate: *const fn (ctx: *anyopaque) ?Iterator,
+};
+
+// --- Headers Methods --- //
 
 /// Returns true if this Headers instance is read-only (from request).
 pub fn isReadOnly(self: *const Headers) bool {
-    return self.request != null;
+    return self.read_only;
 }
 
 /// Returns the value of the header with the specified name.
 pub fn get(self: *const Headers, name: []const u8) ?[]const u8 {
-    if (self.request) |req| return req.headers.get(name);
-    if (self.response) |res| return res.headers.get(name);
+    if (self.vtable) |vt| {
+        if (self.backend_ctx) |ctx| {
+            return vt.get(ctx, name);
+        }
+    }
     return null;
 }
 
 /// Returns whether a header with the specified name exists.
 pub fn has(self: *const Headers, name: []const u8) bool {
-    if (self.request) |req| return req.headers.has(name);
-    if (self.response) |res| return res.headers.has(name);
+    if (self.vtable) |vt| {
+        if (self.backend_ctx) |ctx| {
+            return vt.has(ctx, name);
+        }
+    }
     return false;
 }
 
-/// Returns an iterator over all key/value pairs.
-pub fn entries(self: *const Headers) Iterator {
-    if (self.request) |req| return req.headers.iterator();
-    if (self.response) |res| return res.headers.iterator();
-    unreachable;
-}
-
-/// Returns an iterator over all keys.
-pub fn keys(self: *const Headers) KeyIterator {
-    return .{ .inner = self.entries() };
-}
-
-/// Returns an iterator over all values.
-pub fn values(self: *const Headers) ValueIterator {
-    return .{ .inner = self.entries() };
-}
-
-/// Returns the value of the Set-Cookie header.
-pub fn getSetCookie(self: *const Headers) ?[]const u8 {
-    return self.get("set-cookie");
-}
-
 /// Appends a new value onto an existing header (response only, no-op for request).
+/// https://developer.mozilla.org/en-US/docs/Web/API/Headers/append
 pub fn append(self: *Headers, name: []const u8, value: []const u8) void {
-    if (self.response) |res| res.header(name, value);
+    if (self.read_only) return;
+    if (self.vtable) |vt| {
+        if (self.backend_ctx) |ctx| {
+            vt.append(ctx, name, value);
+        }
+    }
 }
 
 /// Sets a header value (response only, no-op for request).
+/// https://developer.mozilla.org/en-US/docs/Web/API/Headers/set
 pub fn set(self: *Headers, name: []const u8, value: []const u8) void {
-    if (self.response) |res| res.header(name, value);
+    if (self.read_only) return;
+    if (self.vtable) |vt| {
+        if (self.backend_ctx) |ctx| {
+            vt.set(ctx, name, value);
+        }
+    }
 }
 
-pub const Iterator = httpz.StringKeyValue.Iterator;
+/// Deletes a header. Note: Most backends don't support header deletion.
+/// https://developer.mozilla.org/en-US/docs/Web/API/Headers/delete
+pub fn delete(self: *Headers, name: []const u8) void {
+    _ = self;
+    _ = name;
+    // Most backends don't support deletion - no-op
+}
 
-pub const KeyIterator = struct {
-    inner: Iterator,
+/// Returns an iterator over all key/value pairs.
+pub fn entries(self: *const Headers) ?Iterator {
+    if (self.vtable) |vt| {
+        if (self.backend_ctx) |ctx| {
+            return vt.iterate(ctx);
+        }
+    }
+    return null;
+}
 
-    pub fn next(self: *KeyIterator) ?[]const u8 {
-        if (self.inner.next()) |entry| return entry.key;
+/// Executes a provided function once for each header.
+/// https://developer.mozilla.org/en-US/docs/Web/API/Headers/forEach
+pub fn forEach(self: *const Headers, callback: *const fn (value: []const u8, key: []const u8) void) void {
+    if (self.entries()) |*iter| {
+        var it = iter.*;
+        while (it.next()) |entry| {
+            callback(entry.value, entry.name);
+        }
+    }
+}
+
+// --- Iterator (vtable-based, for backend abstraction) --- //
+
+/// Backend-agnostic iterator for iterating over headers.
+///
+/// Example:
+/// ```zig
+/// if (headers.entries()) |*iter| {
+///     while (iter.next()) |header| {
+///         std.debug.print("{s}: {s}\n", .{ header.name, header.value });
+///     }
+/// }
+/// ```
+pub const Iterator = struct {
+    backend_ctx: ?*anyopaque = null,
+    nextFn: ?*const fn (ctx: *anyopaque) ?Header = null,
+
+    /// Returns the next header, or null if iteration is complete.
+    pub fn next(self: *Iterator) ?Header {
+        if (self.nextFn) |nextFunc| {
+            if (self.backend_ctx) |ctx| {
+                return nextFunc(ctx);
+            }
+        }
         return null;
     }
 };
 
-pub const ValueIterator = struct {
-    inner: Iterator,
+// --- Builder --- //
+pub const Builder = struct {
+    backend_ctx: ?*anyopaque = null,
+    vtable: ?*const VTable = null,
+    read_only: bool = true,
 
-    pub fn next(self: *ValueIterator) ?[]const u8 {
-        if (self.inner.next()) |entry| return entry.value;
-        return null;
+    pub fn build(self: Builder) Headers {
+        return .{
+            .backend_ctx = self.backend_ctx,
+            .vtable = self.vtable,
+            .read_only = self.read_only,
+        };
     }
 };
