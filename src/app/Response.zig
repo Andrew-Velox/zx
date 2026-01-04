@@ -14,6 +14,7 @@ const common = @import("common.zig");
 pub const Response = @This();
 
 // Re-export common types for convenience
+pub const Cookies = common.Cookies;
 pub const CookieOptions = common.CookieOptions;
 pub const ContentType = common.ContentType;
 pub const HttpStatus = common.HttpStatus;
@@ -129,6 +130,8 @@ pub const VTable = struct {
     writeChunk: *const fn (ctx: *anyopaque, data: []const u8) anyerror!void,
     /// Clears the response writer/buffer.
     clearWriter: *const fn (ctx: *anyopaque) void,
+    /// Sets a cookie on the response.
+    setCookie: *const fn (ctx: *anyopaque, name: []const u8, value: []const u8, opts: CookieOptions) anyerror!void,
 };
 
 // --- Methods --- //
@@ -206,6 +209,37 @@ pub fn redirect(self: *const Response, location: []const u8, redirect_status: ?u
     const code = redirect_status orelse 302;
     self.setStatusCode(code);
     self.setHeader("Location", location);
+}
+
+/// **Extension to Web Standard:**
+/// Sets a cookie on the response.
+///
+/// https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies
+///
+/// **Parameters:**
+/// - `name`: The cookie name.
+/// - `value`: The cookie value.
+/// - `options`: Optional cookie options (path, domain, max_age, secure, etc.).
+pub fn setCookie(self: *const Response, name: []const u8, value: []const u8, options: ?CookieOptions) void {
+    const opts = options orelse CookieOptions{};
+    if (self.vtable) |vt| {
+        if (self.backend_ctx) |ctx| {
+            vt.setCookie(ctx, name, value, opts) catch {};
+        }
+    }
+}
+
+/// **Extension to Web Standard:**
+/// Deletes a cookie by setting it with an expired max-age.
+///
+///
+/// **Parameters:**
+/// - `name`: The cookie name to delete.
+/// - `options`: Optional cookie options (path and domain should match the original cookie).
+pub fn deleteCookie(self: *const Response, name: []const u8, options: ?CookieOptions) void {
+    var opts = options orelse CookieOptions{};
+    opts.max_age = 0; // Setting max-age to 0 deletes the cookie
+    self.setCookie(name, "", opts);
 }
 
 /// Gets the response writer for streaming content.

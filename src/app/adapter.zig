@@ -130,6 +130,7 @@ const response_vtable = Response.VTable{
     .getWriter = &responseGetWriter,
     .writeChunk = &responseWriteChunk,
     .clearWriter = &responseClearWriter,
+    .setCookie = &responseSetCookie,
 };
 
 fn responseSetStatus(ctx: *anyopaque, status: u16) void {
@@ -166,6 +167,25 @@ fn responseWriteChunk(ctx: *anyopaque, data: []const u8) anyerror!void {
 fn responseClearWriter(ctx: *anyopaque) void {
     const res: *httpz.Response = @ptrCast(@alignCast(ctx));
     res.clearWriter();
+}
+
+fn responseSetCookie(ctx: *anyopaque, name: []const u8, value: []const u8, opts: common.CookieOptions) anyerror!void {
+    const res: *httpz.Response = @ptrCast(@alignCast(ctx));
+    // Convert from common.CookieOptions to httpz.CookieOpts
+    const httpz_opts: httpz.response.CookieOpts = .{
+        .path = opts.path,
+        .domain = opts.domain,
+        .max_age = opts.max_age,
+        .secure = opts.secure,
+        .http_only = opts.http_only,
+        .partitioned = opts.partitioned,
+        .same_site = if (opts.same_site) |ss| switch (ss) {
+            .lax => .lax,
+            .strict => .strict,
+            .none => .none,
+        } else null,
+    };
+    try res.setCookie(name, value, httpz_opts);
 }
 
 const response_headers_vtable = Response.Headers.HeadersVTable{
