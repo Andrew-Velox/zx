@@ -5,7 +5,7 @@ const zx = @import("zx");
 const config = zx.App.Config{ .meta = @import("meta.zig").meta, .server = .{ .port = 5588 } };
 
 pub fn main() !void {
-    if (builtin.os.tag == .freestanding) return;
+    if (zx.platform == .browser) return;
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -24,6 +24,8 @@ var client = zx.Client.init(
 );
 
 export fn mainClient() void {
+    if (zx.platform != .browser) return;
+
     client.info();
     client.renderAll();
 }

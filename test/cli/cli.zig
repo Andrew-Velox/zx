@@ -146,6 +146,13 @@ test "init → build" {
     const test_dir_abs = try getTestDirPath();
     defer allocator.free(test_dir_abs);
 
+    // Update build.zig.zon to use the local zx dependency, copy local_zon_str to build.zig.zon
+    const build_zig_zon_path = try std.fs.path.join(allocator, &.{ test_dir_abs, "build.zig.zon" });
+    defer allocator.free(build_zig_zon_path);
+    var build_zig_zon = try std.fs.openDirAbsolute(test_dir_abs, .{});
+    defer build_zig_zon.close();
+    try build_zig_zon.writeFile(.{ .sub_path = build_zig_zon_path, .data = local_zon_str });
+
     var build_child = std.process.Child.init(&.{ "zig", "build" }, allocator);
     build_child.cwd = test_dir_abs;
     // build_child.stdout_behavior = .Ignore;

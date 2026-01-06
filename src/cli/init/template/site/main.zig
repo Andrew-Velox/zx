@@ -6,7 +6,7 @@ const builtin = @import("builtin");
 const config = zx.App.Config{ .server = .{}, .meta = meta };
 
 pub fn main() !void {
-    if (builtin.os.tag == .freestanding) return;
+    if (zx.platform == .browser) return;
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -25,6 +25,8 @@ var client = zx.Client.init(
 );
 
 export fn mainClient() void {
+    if (zx.platform != .browser) return;
+
     client.info();
     client.renderAll();
 }

@@ -1846,6 +1846,23 @@ pub const BuiltinAttribute = struct {
 
 const builtin = @import("builtin");
 pub const client_allocator = if (builtin.os.tag == .freestanding) std.heap.wasm_allocator else std.heap.page_allocator;
+pub const Platform = enum {
+    /// Browser environment (WASM)
+    browser,
+    /// Server environment
+    server,
+
+    /// Future - Android environment
+    android,
+    /// Future - iOS environment
+    ios,
+    /// Future - macOS environment
+    macos,
+    /// Future - Windows environment
+    windows,
+};
+
+pub const platform = if (builtin.os.tag == .freestanding) .browser else .server;
 
 pub const Headers = @import("app/Headers.zig");
 pub const Request = @import("app/Request.zig");
