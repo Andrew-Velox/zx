@@ -37,10 +37,8 @@ const EVENT_TYPE_MAP: Record<DelegatedEvent, number> = {
     'scroll': 18,
 };
 
-const jsz = new ZigJS();
+export const jsz = new ZigJS();
 const importObject = {
-    module: {},
-    env: {},
     ...jsz.importObject(),
 };
 
@@ -75,7 +73,6 @@ class ZXInstance {
         const root = document.querySelector(rootSelector);
         if (!root) return;
 
-        // Attach delegated event listeners
         for (const eventType of DELEGATED_EVENTS) {
             root.addEventListener(eventType, (event: Event) => {
                 this.#handleDelegatedEvent(eventType, event);
@@ -110,7 +107,6 @@ class ZXInstance {
         }
     }
 
-    /** Get the VElement ID from a DOM element */
     getZxRef(element: HTMLElement): number | undefined {
         return element.__zx_ref;
     }
@@ -118,7 +114,8 @@ class ZXInstance {
 
 export async function init(options: InitOptions = {}) {
     const url = options?.url ?? DEFAULT_URL;
-    const { instance } = await WebAssembly.instantiateStreaming(fetch(url), importObject);
+    const wasmInstiatedSource = await WebAssembly.instantiateStreaming(fetch(url), Object.assign({}, importObject, options.importObject));
+    const { instance } = wasmInstiatedSource;
 
     jsz.memory = instance.exports.memory as WebAssembly.Memory;
     window._zx = new ZXInstance({ exports: instance.exports });
@@ -129,6 +126,7 @@ export async function init(options: InitOptions = {}) {
     const main = instance.exports.mainClient;
     if (typeof main === 'function') main();
 
+    return wasmInstiatedSource;
 }
 
 export type InitOptions = {
@@ -136,6 +134,7 @@ export type InitOptions = {
     url?: string;
     /** CSS selector for the event delegation root element (default: 'body') */
     eventDelegationRoot?: string;
+    importObject?: WebAssembly.Imports;
 };
 
 type ZXInstanceOptions = {

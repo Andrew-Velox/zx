@@ -87,6 +87,8 @@ fn resetTodosForSSR(allocator: zx.Allocator) void {
 fn addTodo(ctx: zx.EventContext) void {
     ctx.preventDefault();
     if (comptime builtin.cpu.arch != .wasm32) return;
+    apiCall(ctx);
+
     const document = zx.Client.bom.Document.init(todos_allocator);
     const input = document.getElementById("todo-input") catch return;
 
@@ -128,9 +130,10 @@ fn toggleTodo(ctx: zx.EventContext) void {
     zx.requestRender();
 }
 
-fn clearTodos(_: zx.EventContext) void {
+fn clearTodos(ctx: zx.EventContext) void {
     todos.clearRetainingCapacity();
     zx.requestRender();
+    apiCall(ctx);
 }
 
 fn deleteTodo(ctx: zx.EventContext) void {
@@ -160,6 +163,44 @@ fn countCompleted() u32 {
     }
     return count;
 }
+
+export fn onFetchComplete(ptr: [*]const u8, len: usize) void {
+    if (comptime builtin.cpu.arch != .wasm32) return;
+
+    const console = zx.Client.bom.Console.init();
+
+    const result: []const u8 = ptr[0..len];
+
+    console.str("Fetch completed! Response:");
+    console.str(result);
+
+}
+
+extern "env" fn zxFetch(url_ptr: [*]const u8, url_len: usize) void;
+
+fn apiCall(_: zx.EventContext) void {
+    if (comptime builtin.cpu.arch != .wasm32) return;
+
+    const console = zx.Client.bom.Console.init();
+    console.str("Starting fetch request...");
+
+    const url = "https://jsonplaceholder.typicode.com/todos/1";
+    zxFetch(url.ptr, url.len);
+
+    console.str("Fetch initiated (async)");
+}
+
+/// Export allocator functions for JS to allocate/free WASM memory
+export fn wasmAlloc(len: usize) ?[*]u8 {
+    const slice = todos_allocator.alloc(u8, len) catch return null;
+    return slice.ptr;
+}
+
+export fn wasmFree(ptr: [*]u8, len: usize) void {
+    todos_allocator.free(ptr[0..len]);
+}
+
+
 
 // This is temporarily here to validated pagecontext is buildable for wasm target
 fn Counter(allocator: zx.Allocator) zx.Component {
