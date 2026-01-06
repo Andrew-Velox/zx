@@ -209,7 +209,7 @@ const templates = [_]TemplateFile{
     // WASM (CSR)
     .{ .name = .wasm, .path = "build.zig", .content = @embedFile(template_dir ++ "/build.zig") },
     .{ .name = .wasm, .path = "site/main.zig", .content = @embedFile(template_dir ++ "/site/main.zig") },
-    .{ .name = .wasm, .path = "site/assets/main.wasm.js", .content = @embedFile(template_dir ++ "/site/assets/main.wasm.js") },
+    // .{ .name = .wasm, .path = "site/assets/main.wasm.js", .content = @embedFile(template_dir ++ "/site/assets/main.wasm.js") },
     .{ .name = .wasm, .path = "site/pages/page.zx", .content = @embedFile(template_dir ++ "/site/pages/page+wasm.zx") },
     .{ .name = .wasm, .path = "site/pages/client.zx", .content = @embedFile(template_dir ++ "/site/pages/client.zx") },
 

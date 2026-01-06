@@ -26,11 +26,20 @@ async function main() {
   console.log(`\x1b[33m📦 ${pkgName} - Bundling...\x1b[0m`);
   await $`rm -rf ${pkgDistDir}`.quiet();
   
-  // Build main entry
-  Bun.build({
+  // Build main entry modules
+  await Bun.build({
     entrypoints: [join(pkgDir, "src/index.ts"), join(pkgDir, "src/react/index.ts"), join(pkgDir, "src/wasm/index.ts")],
     outdir: pkgDistDir,
     // minify: true,
+  });
+
+  // Build standalone WASM init script (auto-initializes, for direct <script> usage)
+  console.log(`\x1b[33m📦 ${pkgName} - Building standalone wasm/init.js...\x1b[0m`);
+  await Bun.build({
+    entrypoints: [join(pkgDir, "src/wasm/init.ts")],
+    outdir: join(pkgDistDir, "wasm"),
+    minify: false,
+    naming: "[name].js",
   });
 
   // Generate TypeScript declaration files
