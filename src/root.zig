@@ -1627,10 +1627,14 @@ pub const NotFoundOptions = struct {
     caching: BuiltinAttribute.Caching = .none,
 };
 pub const ErrorOptions = struct {};
+pub const RouteOptions = struct {
+    caching: BuiltinAttribute.Caching = .none,
+};
 pub const PageContext = routing.PageContext;
 pub const LayoutContext = routing.LayoutContext;
 pub const NotFoundContext = routing.NotFoundContext;
 pub const ErrorContext = routing.ErrorContext;
+pub const RouteContext = routing.RouteContext;
 
 /// Compute the merged type of two structs for props spreading
 /// All fields from both structs are included in the result

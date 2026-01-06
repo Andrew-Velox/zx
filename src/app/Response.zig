@@ -125,7 +125,7 @@ pub const VTable = struct {
     /// Sets a header.
     setHeader: *const fn (ctx: *anyopaque, name: []const u8, value: []const u8) void,
     /// Gets a writer for streaming.
-    getWriter: *const fn (ctx: *anyopaque) ?std.io.AnyWriter,
+    getWriter: *const fn (ctx: *anyopaque) *std.Io.Writer,
     /// Writes a chunk for chunked transfer.
     writeChunk: *const fn (ctx: *anyopaque, data: []const u8) anyerror!void,
     /// Clears the response writer/buffer.
@@ -171,6 +171,23 @@ pub fn setBody(self: *const Response, content: []const u8) void {
         if (self.backend_ctx) |ctx| {
             vt.setBody(ctx, content);
         }
+    }
+}
+
+/// Sets the response body to a JSON string.
+///
+/// **Zig Note:** This is an extension method not present in the web standard Response
+/// interface (which has read-only body). This method updates the backend response.
+///
+/// **Parameters:**
+/// - `value`: The value to serialize as JSON.
+/// - `options`: Optional JSON stringify options (whitespace, etc.).
+pub fn json(self: *const Response, value: anytype, options: std.json.Stringify.Options) !void {
+    self.setContentType(.@"application/json");
+
+    if (self.writer()) |w| {
+        const json_formatter = std.json.fmt(value, options);
+        try json_formatter.format(w);
     }
 }
 
@@ -246,7 +263,7 @@ pub fn deleteCookie(self: *const Response, name: []const u8, options: ?CookieOpt
 ///
 /// **Zig Note:** This is an extension method not present in the web standard.
 /// Used for server-side streaming responses.
-pub fn writer(self: *const Response) ?std.io.AnyWriter {
+pub fn writer(self: *const Response) ?*std.Io.Writer {
     if (self.vtable) |vt| {
         if (self.backend_ctx) |ctx| {
             return vt.getWriter(ctx);

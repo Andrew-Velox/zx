@@ -634,14 +634,17 @@ fn genReactComponents(allocator: std.mem.Allocator, components: []const ClientCo
 // --- Route and Meta Generation --- //
 const Route = struct {
     path: []const u8,
-    page_import: []const u8,
-    layout_import: ?[]const u8,
-    notfound_import: ?[]const u8,
-    error_import: ?[]const u8,
+    page_import: ?[]const u8 = null,
+    layout_import: ?[]const u8 = null,
+    notfound_import: ?[]const u8 = null,
+    error_import: ?[]const u8 = null,
+    route_import: ?[]const u8 = null, // API route import
 
     fn deinit(self: *Route, allocator: std.mem.Allocator) void {
         allocator.free(self.path);
-        allocator.free(self.page_import);
+        if (self.page_import) |import| {
+            allocator.free(import);
+        }
         if (self.layout_import) |import| {
             allocator.free(import);
         }
@@ -651,28 +654,66 @@ const Route = struct {
         if (self.error_import) |import| {
             allocator.free(import);
         }
+        if (self.route_import) |import| {
+            allocator.free(import);
+        }
     }
 };
 
 fn genRoutes(allocator: std.mem.Allocator, output_dir: []const u8, verbose: bool) !void {
-    const pages_dir = try std.fs.path.join(allocator, &.{ output_dir, "pages" });
-    defer allocator.free(pages_dir);
-
-    std.fs.cwd().access(pages_dir, .{}) catch |err| {
-        if (verbose) std.debug.print("No pages directory found at {s}, skipping meta.zig generation\n", .{pages_dir});
-        return err;
-    };
-    if (verbose) std.debug.print("Generating meta.zig from pages directory: {s}\n", .{pages_dir});
-
-    // Use .zx/pages as the import prefix since that's where the transpiled files are
-    const import_prefix = try std.mem.concat(allocator, u8, &.{"pages"});
-    defer allocator.free(import_prefix);
-    var routes = try scanPagesDirectory(allocator, pages_dir, import_prefix);
+    var routes = std.array_list.Managed(Route).init(allocator);
     defer {
         for (routes.items) |*route| {
             route.deinit(allocator);
         }
         routes.deinit();
+    }
+
+    // Scan pages directory
+    const pages_dir = try std.fs.path.join(allocator, &.{ output_dir, "pages" });
+    defer allocator.free(pages_dir);
+
+    const has_pages = blk: {
+        std.fs.cwd().access(pages_dir, .{}) catch break :blk false;
+        break :blk true;
+    };
+
+    if (has_pages) {
+        if (verbose) std.debug.print("Scanning pages directory: {s}\n", .{pages_dir});
+        const pages_import_prefix = try std.mem.concat(allocator, u8, &.{"pages"});
+        defer allocator.free(pages_import_prefix);
+
+        var layout_stack = std.array_list.Managed([]const u8).init(allocator);
+        defer {
+            for (layout_stack.items) |layout| {
+                allocator.free(layout);
+            }
+            layout_stack.deinit();
+        }
+
+        try scanPagesRecursive(allocator, pages_dir, "", &layout_stack, pages_import_prefix, &routes);
+    }
+
+    // Scan routes directory for API routes
+    const routes_dir = try std.fs.path.join(allocator, &.{ output_dir, "routes" });
+    defer allocator.free(routes_dir);
+
+    const has_routes = blk: {
+        std.fs.cwd().access(routes_dir, .{}) catch break :blk false;
+        break :blk true;
+    };
+
+    if (has_routes) {
+        if (verbose) std.debug.print("Scanning routes directory: {s}\n", .{routes_dir});
+        const routes_import_prefix = try std.mem.concat(allocator, u8, &.{"routes"});
+        defer allocator.free(routes_import_prefix);
+
+        try scanRoutesRecursive(allocator, routes_dir, "", routes_import_prefix, &routes);
+    }
+
+    if (!has_pages and !has_routes) {
+        if (verbose) std.debug.print("No pages or routes directory found, skipping meta.zig generation\n", .{});
+        return error.NoPagesOrRoutes;
     }
 
     var content = std.array_list.Managed(u8).init(allocator);
@@ -761,7 +802,10 @@ fn writeRoute(writer: anytype, route: Route) !void {
     try writer.print("{s}.{{\n", .{indent});
     try writer.print("{s}    .path = \"{s}\",\n", .{ indent, route.path });
 
-    try writer.print("{s}    .page = wrapPage(@import(\"{s}\").Page),\n", .{ indent, route.page_import });
+    // Page (optional for API-only routes)
+    if (route.page_import) |page| {
+        try writer.print("{s}    .page = wrapPage(@import(\"{s}\").Page),\n", .{ indent, page });
+    }
 
     if (route.layout_import) |layout| {
         try writer.print("{s}    .layout = @import(\"{s}\").Layout,\n", .{ indent, layout });
@@ -775,8 +819,10 @@ fn writeRoute(writer: anytype, route: Route) !void {
         try writer.print("{s}    .@\"error\" = @import(\"{s}\").Error,\n", .{ indent, err_import });
     }
 
-    // Page options
-    try writer.print("{s}    .page_opts = getOptions(@import(\"{s}\"), zx.PageOptions),\n", .{ indent, route.page_import });
+    // Page options (only if page exists)
+    if (route.page_import) |page| {
+        try writer.print("{s}    .page_opts = getOptions(@import(\"{s}\"), zx.PageOptions),\n", .{ indent, page });
+    }
 
     // Layout options (only if layout exists)
     if (route.layout_import) |layout| {
@@ -793,36 +839,21 @@ fn writeRoute(writer: anytype, route: Route) !void {
         try writer.print("{s}    .error_opts = getOptions(@import(\"{s}\"), zx.ErrorOptions),\n", .{ indent, err_import });
     }
 
+    // API route handlers (built via route)
+    if (route.route_import) |route_import| {
+        // Pass page module for method conflict validation when co-located
+        if (route.page_import) |page_import| {
+            try writer.print("{s}    .route = zx.App.Meta.route(@import(\"{s}\"), @import(\"{s}\")),\n", .{ indent, route_import, page_import });
+        } else {
+            try writer.print("{s}    .route = zx.App.Meta.route(@import(\"{s}\"), null),\n", .{ indent, route_import });
+        }
+        try writer.print("{s}    .route_opts = getOptions(@import(\"{s}\"), zx.RouteOptions),\n", .{ indent, route_import });
+    }
+
     try writer.print("{s}}},\n", .{indent});
 }
 
-fn scanPagesDirectory(
-    allocator: std.mem.Allocator,
-    pages_dir: []const u8,
-    import_prefix: []const u8,
-) !std.array_list.Managed(Route) {
-    var routes = std.array_list.Managed(Route).init(allocator);
-    errdefer {
-        for (routes.items) |*route| {
-            route.deinit(allocator);
-        }
-        routes.deinit();
-    }
-
-    var layout_stack = std.array_list.Managed([]const u8).init(allocator);
-    defer {
-        for (layout_stack.items) |layout| {
-            allocator.free(layout);
-        }
-        layout_stack.deinit();
-    }
-
-    try scanRecursive(allocator, pages_dir, "", &layout_stack, import_prefix, &routes);
-
-    return routes;
-}
-
-fn scanRecursive(
+fn scanPagesRecursive(
     allocator: std.mem.Allocator,
     current_dir: []const u8,
     current_path: []const u8,
@@ -841,6 +872,9 @@ fn scanRecursive(
 
     const error_path = try std.fs.path.join(allocator, &.{ current_dir, "error.zig" });
     defer allocator.free(error_path);
+
+    const route_file_path = try std.fs.path.join(allocator, &.{ current_dir, "route.zig" });
+    defer allocator.free(route_file_path);
 
     const has_page = blk: {
         std.fs.cwd().access(page_path, .{}) catch break :blk false;
@@ -862,14 +896,28 @@ fn scanRecursive(
         break :blk true;
     };
 
+    const has_route = blk: {
+        std.fs.cwd().access(route_file_path, .{}) catch break :blk false;
+        break :blk true;
+    };
+
     var current_layout_import: ?[]const u8 = null;
     if (has_layout) {
         current_layout_import = try std.mem.concat(allocator, u8, &.{ import_prefix, "/layout.zig" });
         try layout_stack.append(current_layout_import.?);
     }
 
-    if (has_page) {
-        const page_import = try std.mem.concat(allocator, u8, &.{ import_prefix, "/page.zig" });
+    if (has_page or has_route) {
+        const page_import = if (has_page)
+            try std.mem.concat(allocator, u8, &.{ import_prefix, "/page.zig" })
+        else
+            null;
+
+        // Co-located route.zig in pages directory
+        const route_import = if (has_route)
+            try std.mem.concat(allocator, u8, &.{ import_prefix, "/route.zig" })
+        else
+            null;
 
         // Only set layout if the current directory has a layout file
         const layout_import = if (has_layout)
@@ -909,6 +957,7 @@ fn scanRecursive(
         const route = Route{
             .path = try normalized_route_path.toOwnedSlice(),
             .page_import = page_import,
+            .route_import = route_import,
             .layout_import = layout_import,
             .notfound_import = notfound_import,
             .error_import = error_import,
@@ -936,12 +985,80 @@ fn scanRecursive(
         const child_import_prefix = try std.mem.concat(allocator, u8, &.{ import_prefix, "/", entry.name });
         defer allocator.free(child_import_prefix);
 
-        try scanRecursive(allocator, child_dir, child_path, layout_stack, child_import_prefix, routes);
+        try scanPagesRecursive(allocator, child_dir, child_path, layout_stack, child_import_prefix, routes);
     }
 
     if (current_layout_import) |layout| {
         _ = layout_stack.pop();
         allocator.free(layout);
+    }
+}
+
+/// Scan routes directory for API route files (route.zig)
+fn scanRoutesRecursive(
+    allocator: std.mem.Allocator,
+    current_dir: []const u8,
+    current_path: []const u8,
+    import_prefix: []const u8,
+    routes: *std.array_list.Managed(Route),
+) !void {
+    const route_file_path = try std.fs.path.join(allocator, &.{ current_dir, "route.zig" });
+    defer allocator.free(route_file_path);
+
+    const has_route = blk: {
+        std.fs.cwd().access(route_file_path, .{}) catch break :blk false;
+        break :blk true;
+    };
+
+    if (has_route) {
+        const route_import = try std.mem.concat(allocator, u8, &.{ import_prefix, "/route.zig" });
+
+        // Build the URL path from directory structure
+        const route_path = if (current_path.len == 0)
+            try allocator.dupe(u8, "/")
+        else
+            try allocator.dupe(u8, current_path);
+        defer allocator.free(route_path);
+
+        // Normalize route path: convert [id] to :id
+        var normalized_route_path = std.array_list.Managed(u8).init(allocator);
+        for (route_path) |c| {
+            if (c == '[') {
+                try normalized_route_path.append(':');
+            } else if (c != ']') {
+                try normalized_route_path.append(c);
+            }
+        }
+
+        const route = Route{
+            .path = try normalized_route_path.toOwnedSlice(),
+            .route_import = route_import,
+        };
+        try routes.append(route);
+    }
+
+    // Recurse into subdirectories
+    var dir = std.fs.cwd().openDir(current_dir, .{ .iterate = true }) catch return;
+    defer dir.close();
+
+    var iter = dir.iterate();
+    while (try iter.next()) |entry| {
+        if (entry.kind != .directory) continue;
+        if (std.mem.eql(u8, entry.name, ".zx")) continue;
+
+        const child_dir = try std.fs.path.join(allocator, &.{ current_dir, entry.name });
+        defer allocator.free(child_dir);
+
+        const child_path = if (current_path.len == 0 or std.mem.eql(u8, current_path, "/"))
+            try std.mem.concat(allocator, u8, &.{ "/", entry.name })
+        else
+            try std.mem.concat(allocator, u8, &.{ current_path, "/", entry.name });
+        defer allocator.free(child_path);
+
+        const child_import_prefix = try std.mem.concat(allocator, u8, &.{ import_prefix, "/", entry.name });
+        defer allocator.free(child_import_prefix);
+
+        try scanRoutesRecursive(allocator, child_dir, child_path, child_import_prefix, routes);
     }
 }
 

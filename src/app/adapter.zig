@@ -148,9 +148,9 @@ fn responseSetHeader(ctx: *anyopaque, name: []const u8, value: []const u8) void 
     res.header(name, value);
 }
 
-fn responseGetWriter(ctx: *anyopaque) ?std.io.AnyWriter {
+fn responseGetWriter(ctx: *anyopaque) *std.Io.Writer {
     const res: *httpz.Response = @ptrCast(@alignCast(ctx));
-    return .{ .context = @ptrCast(res), .writeFn = httpzWriteFn };
+    return res.writer();
 }
 
 fn httpzWriteFn(context: *const anyopaque, buffer: []const u8) anyerror!usize {

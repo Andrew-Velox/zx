@@ -121,7 +121,7 @@ const zx = @import("zx");
     - [ ] Layout
     - [x] Page
     - [ ] Assets
-- [ ] API Route
+- [x] API Route
 - [ ] Plugin (_Alpha_)
     - [x] Builtin TailwindCSS and Esbuild
     - [x] Command based plugin system

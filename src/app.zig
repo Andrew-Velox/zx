@@ -6,9 +6,143 @@ pub const App = struct {
     };
 
     pub const Meta = struct {
+        /// Route handler function type for API routes
+        pub const RouteHandler = *const fn (ctx: zx.RouteContext) anyerror!void;
+
+        /// Custom method entry for non-standard HTTP methods
+        pub const CustomMethod = struct {
+            method: []const u8,
+            handler: RouteHandler,
+        };
+
+        /// Struct containing all HTTP method handlers for an API route
+        pub const RouteHandlers = struct {
+            handler: ?RouteHandler = null, // Catch-all Route function
+            get: ?RouteHandler = null,
+            post: ?RouteHandler = null,
+            put: ?RouteHandler = null,
+            delete: ?RouteHandler = null,
+            patch: ?RouteHandler = null,
+            head: ?RouteHandler = null,
+            options: ?RouteHandler = null,
+            custom_methods: ?[]const CustomMethod = null, // Arbitrary uppercase methods
+        };
+
+        // Standard HTTP methods to exclude from custom detection
+
+        fn isStandardMethod(name: []const u8) bool {
+            const standard_methods = [_][]const u8{ "Route", "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS" };
+            for (standard_methods) |std_method| {
+                if (std.mem.eql(u8, name, std_method)) return true;
+            }
+            return false;
+        }
+
+        fn isAllUppercase(name: []const u8) bool {
+            if (name.len == 0) return false;
+            for (name) |c| {
+                if (c >= 'a' and c <= 'z') return false;
+            }
+            // Must have at least one letter
+            for (name) |c| {
+                if (c >= 'A' and c <= 'Z') return true;
+            }
+            return false;
+        }
+
+        /// Comptime function to build RouteHandlers from a route module
+        /// Optionally takes a page module to validate for method conflicts
+        pub fn route(comptime T: type, comptime PageModule: ?type) RouteHandlers {
+            // Validate for method conflicts when page module is provided
+            if (PageModule) |P| {
+                const page_methods = if (@hasDecl(P, "options") and @hasField(@TypeOf(P.options), "methods"))
+                    P.options.methods
+                else
+                    &[_]zx.PageMethod{.GET};
+
+                // Check for specific method conflicts
+                inline for (page_methods) |method| {
+                    const method_name = @tagName(method);
+                    if (@hasDecl(T, method_name)) {
+                        @compileError("route.zig cannot define " ++ method_name ++ " handler when page.zx handles it. Remove the method from route.zig or page_opts.methods.");
+                    }
+                }
+
+                // Check for Route() catch-all conflict when page handles non-GET methods
+                // Route() would intercept methods that page.zx should handle
+                if (@hasDecl(T, "Route")) {
+                    inline for (page_methods) |method| {
+                        if (method != .GET) {
+                            @compileError("route.zig cannot define Route() catch-all handler when page.zx handles " ++ @tagName(method) ++ ". Use specific method handlers (POST, PUT, etc.) in route.zig instead.");
+                        }
+                    }
+                }
+            }
+
+            // Count custom methods first
+            comptime var custom_count: usize = 0;
+            const decls = @typeInfo(T).@"struct".decls;
+            for (decls) |decl| {
+                if (!isStandardMethod(decl.name) and isAllUppercase(decl.name)) {
+                    const field = @field(T, decl.name);
+                    const FieldType = @TypeOf(field);
+                    if (@typeInfo(FieldType) == .@"fn") {
+                        custom_count += 1;
+                    }
+                }
+            }
+
+            // Build custom methods array as const
+            const custom_methods = comptime blk: {
+                var methods: [custom_count]CustomMethod = undefined;
+                var idx: usize = 0;
+                for (decls) |decl| {
+                    if (!isStandardMethod(decl.name) and isAllUppercase(decl.name)) {
+                        const field = @field(T, decl.name);
+                        const FieldType = @TypeOf(field);
+                        if (@typeInfo(FieldType) == .@"fn") {
+                            methods[idx] = .{
+                                .method = decl.name,
+                                .handler = wrapRoute(field),
+                            };
+                            idx += 1;
+                        }
+                    }
+                }
+                break :blk methods;
+            };
+
+            return .{
+                .handler = if (@hasDecl(T, "Route")) wrapRoute(T.Route) else null,
+                .get = if (@hasDecl(T, "GET")) wrapRoute(T.GET) else null,
+                .post = if (@hasDecl(T, "POST")) wrapRoute(T.POST) else null,
+                .put = if (@hasDecl(T, "PUT")) wrapRoute(T.PUT) else null,
+                .delete = if (@hasDecl(T, "DELETE")) wrapRoute(T.DELETE) else null,
+                .patch = if (@hasDecl(T, "PATCH")) wrapRoute(T.PATCH) else null,
+                .head = if (@hasDecl(T, "HEAD")) wrapRoute(T.HEAD) else null,
+                .options = if (@hasDecl(T, "OPTIONS")) wrapRoute(T.OPTIONS) else null,
+                .custom_methods = if (custom_count > 0) &custom_methods else null,
+            };
+        }
+
+        /// Wrapper to allow routes to return void or !void
+        fn wrapRoute(comptime routeFn: anytype) RouteHandler {
+            const R = @typeInfo(@TypeOf(routeFn)).@"fn".return_type.?;
+            return struct {
+                fn wrapper(ctx: zx.RouteContext) anyerror!void {
+                    // Handle both errorable and non-errorable return types
+                    if (R == void) {
+                        routeFn(ctx);
+                    } else {
+                        try routeFn(ctx);
+                    }
+                }
+            }.wrapper;
+        }
+
         pub const Route = struct {
             path: []const u8,
-            page: *const fn (ctx: zx.PageContext) anyerror!Component,
+            page: ?*const fn (ctx: zx.PageContext) anyerror!Component = null,
             layout: ?*const fn (ctx: zx.LayoutContext, component: Component) Component = null,
             notfound: ?*const fn (ctx: zx.NotFoundContext) Component = null,
             @"error": ?*const fn (ctx: zx.ErrorContext) Component = null,
@@ -16,6 +150,8 @@ pub const App = struct {
             layout_opts: ?zx.LayoutOptions = null,
             notfound_opts: ?zx.NotFoundOptions = null,
             error_opts: ?zx.ErrorOptions = null,
+            route: ?RouteHandlers = null,
+            route_opts: ?zx.RouteOptions = null,
         };
         pub const CliCommand = enum { dev, serve, @"export" };
 
@@ -57,31 +193,64 @@ pub const App = struct {
 
         // Routes
         for (config.meta.routes) |*route| {
-            var method_found = false;
-            var get_method_found = false;
-            if (route.page_opts) |pg_opts| {
-                for (pg_opts.methods) |method| {
-                    method_found = true;
-                    switch (method) {
-                        .GET => {
-                            get_method_found = true;
-                            router.get(route.path, Handler.page, .{ .data = route });
-                        },
-                        .POST => router.post(route.path, Handler.page, .{ .data = route }),
-                        .PUT => router.put(route.path, Handler.page, .{ .data = route }),
-                        .DELETE => router.delete(route.path, Handler.page, .{ .data = route }),
-                        .PATCH => router.patch(route.path, Handler.page, .{ .data = route }),
-                        .OPTIONS => router.options(route.path, Handler.page, .{ .data = route }),
-                        .HEAD => router.head(route.path, Handler.page, .{ .data = route }),
-                        .CONNECT => router.connect(route.path, Handler.page, .{ .data = route }),
-                        .TRACE => router.trace(route.path, Handler.page, .{ .data = route }),
-                        .ALL => router.all(route.path, Handler.page, .{ .data = route }),
+            // Check if this is an API-only route (no page)
+            const is_api_only = route.page == null;
+
+            if (!is_api_only) {
+                // Page routes
+                var method_found = false;
+                var get_method_found = false;
+                if (route.page_opts) |pg_opts| {
+                    for (pg_opts.methods) |method| {
+                        method_found = true;
+                        switch (method) {
+                            .GET => {
+                                get_method_found = true;
+                                router.get(route.path, Handler.page, .{ .data = route });
+                            },
+                            .POST => router.post(route.path, Handler.page, .{ .data = route }),
+                            .PUT => router.put(route.path, Handler.page, .{ .data = route }),
+                            .DELETE => router.delete(route.path, Handler.page, .{ .data = route }),
+                            .PATCH => router.patch(route.path, Handler.page, .{ .data = route }),
+                            .OPTIONS => router.options(route.path, Handler.page, .{ .data = route }),
+                            .HEAD => router.head(route.path, Handler.page, .{ .data = route }),
+                            .CONNECT => router.connect(route.path, Handler.page, .{ .data = route }),
+                            .TRACE => router.trace(route.path, Handler.page, .{ .data = route }),
+                            .ALL => router.all(route.path, Handler.page, .{ .data = route }),
+                        }
                     }
+                }
+
+                if (!method_found or !get_method_found) {
+                    router.get(route.path, Handler.page, .{ .data = route });
                 }
             }
 
-            if (!method_found or !get_method_found) {
-                router.get(route.path, Handler.page, .{ .data = route });
+            // API routes
+            if (route.route) |handlers| {
+                if (handlers.get) |_| router.get(route.path, Handler.api, .{ .data = route });
+                if (handlers.post) |_| router.post(route.path, Handler.api, .{ .data = route });
+                if (handlers.put) |_| router.put(route.path, Handler.api, .{ .data = route });
+                if (handlers.delete) |_| router.delete(route.path, Handler.api, .{ .data = route });
+                if (handlers.patch) |_| router.patch(route.path, Handler.api, .{ .data = route });
+                if (handlers.head) |_| router.head(route.path, Handler.api, .{ .data = route });
+                if (handlers.options) |_| router.options(route.path, Handler.api, .{ .data = route });
+
+                if (handlers.handler) |_| {
+                    if (handlers.get == null and is_api_only) router.get(route.path, Handler.api, .{ .data = route });
+                    if (handlers.post == null) router.post(route.path, Handler.api, .{ .data = route });
+                    if (handlers.put == null) router.put(route.path, Handler.api, .{ .data = route });
+                    if (handlers.delete == null) router.delete(route.path, Handler.api, .{ .data = route });
+                    if (handlers.patch == null) router.patch(route.path, Handler.api, .{ .data = route });
+                    if (handlers.head == null) router.head(route.path, Handler.api, .{ .data = route });
+                    if (handlers.options == null) router.options(route.path, Handler.api, .{ .data = route });
+                }
+
+                if (handlers.custom_methods) |custom_methods| {
+                    for (custom_methods) |custom| {
+                        router.method(custom.method, route.path, Handler.api, .{ .data = route });
+                    }
+                }
             }
         }
 

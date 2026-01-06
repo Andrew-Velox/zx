@@ -107,3 +107,23 @@ pub const ErrorContext = struct {
         self.allocator.destroy(self);
     }
 };
+
+pub const RouteContext = struct {
+    /// The HTTP request object (backend-agnostic)
+    request: Request,
+    /// The HTTP response object (backend-agnostic)
+    response: Response,
+    /// Global allocator
+    allocator: std.mem.Allocator,
+    /// Arena allocator for request-scoped allocations
+    arena: std.mem.Allocator,
+
+    pub fn init(request: Request, response: Response, alloc: std.mem.Allocator) RouteContext {
+        return .{
+            .request = request,
+            .response = response,
+            .allocator = alloc,
+            .arena = request.arena,
+        };
+    }
+};

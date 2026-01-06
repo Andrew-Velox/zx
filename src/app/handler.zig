@@ -559,6 +559,46 @@ pub const Handler = struct {
         return null;
     }
 
+    pub fn api(self: *Handler, req: *httpz.Request, res: *httpz.Response) !void {
+        const allocator = self.allocator;
+        const abstract_req = httpz_adapter.createRequest(req);
+        const abstract_res = httpz_adapter.createResponse(res, req.arena);
+        const routectx = zx.RouteContext.init(abstract_req, abstract_res, allocator);
+
+        if (req.route_data) |rd| {
+            const route_data: *const App.Meta.Route = @ptrCast(@alignCast(rd));
+            const handlers = route_data.route orelse return self.notFound(req, res);
+
+            // Find the appropriate handler based on HTTP method
+            const route_fn: ?App.Meta.RouteHandler = switch (req.method) {
+                .GET => handlers.get orelse handlers.handler,
+                .POST => handlers.post orelse handlers.handler,
+                .PUT => handlers.put orelse handlers.handler,
+                .DELETE => handlers.delete orelse handlers.handler,
+                .PATCH => handlers.patch orelse handlers.handler,
+                .HEAD => handlers.head orelse handlers.handler,
+                .OPTIONS => handlers.options orelse handlers.handler,
+                .OTHER => blk: {
+                    // Look up custom method handler by method string
+                    if (handlers.custom_methods) |custom_methods| {
+                        for (custom_methods) |custom| {
+                            if (std.mem.eql(u8, custom.method, req.method_string)) {
+                                break :blk custom.handler;
+                            }
+                        }
+                    }
+                    break :blk handlers.handler;
+                },
+                else => handlers.handler,
+            };
+
+            const handler = route_fn orelse return self.notFound(req, res);
+            handler(routectx) catch |err| {
+                return self.uncaughtError(req, res, err);
+            };
+        }
+    }
+
     pub fn page(self: *Handler, req: *httpz.Request, res: *httpz.Response) !void {
         const allocator = self.allocator;
         const is_dev_mode = self.meta.cli_command == .dev;
@@ -580,11 +620,14 @@ pub const Handler = struct {
         if (req.route_data) |rd| {
             const route: *const App.Meta.Route = @ptrCast(@alignCast(rd));
 
+            // Check if this route has a page handler
+            const page_fn = route.page orelse return self.notFound(req, res);
+
             // Handle route rendering with error handling
             blk: {
                 const normalized_route_path = route.path;
 
-                var page_component = route.page(pagectx) catch |err| {
+                var page_component = page_fn(pagectx) catch |err| {
                     return self.uncaughtError(req, res, err);
                 };
 

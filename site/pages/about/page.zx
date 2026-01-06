@@ -41,4 +41,8 @@ pub fn Page(ctx: zx.PageContext) zx.Component {
     );
 }
 
+pub const options = zx.PageOptions{
+    .methods = &.{ .GET },
+};
+
 const zx = @import("zx");
