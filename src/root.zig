@@ -1866,7 +1866,14 @@ pub const Platform = enum {
     windows,
 };
 
-pub const platform = if (builtin.os.tag == .freestanding) .browser else .server;
+/// The platform the code is running on
+/// - `browser` if running in a browser environment (WASM)
+/// - `server` if running on a server environment
+/// - `android` if running on an Android environment
+/// - `ios` if running on an iOS environment
+/// - `macos` if running on a macOS environment
+/// - `windows` if running on a Windows environment
+pub const platform: Platform = if (builtin.os.tag == .freestanding) .browser else .server;
 
 pub const Headers = @import("app/Headers.zig");
 pub const Request = @import("app/Request.zig");
