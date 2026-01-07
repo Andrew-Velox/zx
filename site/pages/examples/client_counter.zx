@@ -1,9 +1,8 @@
 var count: zx.Signal(i32) = .init(0);
 var doubled: zx.Computed(i32, i32) = .init(&count, doubleValue);
-var countEffect = zx.Effect(i32).init(&count, onCountChange);
 
 pub fn CounterComponent(allocator: zx.Allocator) zx.Component {
-    countEffect.run();
+    _ = zx.Effect(i32).init(&count, onCountChange);
 
     return (
         <div @allocator={allocator}>

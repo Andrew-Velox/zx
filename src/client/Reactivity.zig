@@ -238,10 +238,7 @@ fn formatValue(comptime T: type, value: T, buf: []u8) []const u8 {
 }
 
 /// Update all DOM text nodes bound to a signal.
-/// Uses direct registry lookups - no DOM querying or tree walking (SolidJS-style).
-/// No-op on server builds (no DOM to update).
 fn updateSignalNodes(signal_id: u64, value: anytype) void {
-    // On server builds, there's no DOM to update
     if (!is_wasm) return;
     if (signal_id >= MAX_SIGNALS) return;
 
@@ -387,24 +384,44 @@ pub fn Computed(comptime T: type, comptime SourceT: type) type {
 }
 
 /// Effect that runs when its source signal changes.
-/// Automatically subscribes to the signal on first run.
-/// SolidJS-style: effects are triggered by signal.set() calls.
 pub fn Effect(comptime T: type) type {
     return struct {
         const Self = @This();
+
+        /// Static storage for effects to ensure stable pointers for auto-run
+        const MAX_AUTO_EFFECTS = 32;
+        var auto_effects: [MAX_AUTO_EFFECTS]Self = undefined;
+        var auto_effect_count: usize = 0;
 
         source: *const Signal(T),
         callback: *const fn (T) void,
         last_value: ?T = null,
         registered: bool = false,
 
-        pub fn init(source: *const Signal(T), callback: *const fn (T) void) Self {
-            return .{
+        /// Initialize and auto-run the effect.
+        /// The effect is stored in static storage and automatically registered with the signal.
+        /// After init, the effect will be called immediately and on every signal change.
+        pub fn init(source: *const Signal(T), callback: *const fn (T) void) *Self {
+            if (auto_effect_count >= MAX_AUTO_EFFECTS) {
+                // Fallback: just execute the callback once without registering
+                callback(source.get());
+                return &auto_effects[0]; // Return a dummy pointer
+            }
+
+            const idx = auto_effect_count;
+            auto_effect_count += 1;
+
+            auto_effects[idx] = .{
                 .source = source,
                 .callback = callback,
                 .last_value = null,
                 .registered = false,
             };
+
+            // Auto-run the effect
+            auto_effects[idx].run();
+
+            return &auto_effects[idx];
         }
 
         /// Type-erased wrapper for the registry
