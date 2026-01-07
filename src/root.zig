@@ -2,8 +2,8 @@
 //! This module provides the core component system, rendering engine, and utilities
 //! for creating type-safe, high-performance web applications with server-side rendering.
 const std = @import("std");
-pub const Ast = @import("zx/Ast.zig");
-pub const Parse = @import("zx/Parse.zig");
+pub const Ast = @import("core/Ast.zig");
+pub const Parse = @import("core/Parse.zig");
 const cachez = @import("cachez");
 
 /// Global cache for components and pages
