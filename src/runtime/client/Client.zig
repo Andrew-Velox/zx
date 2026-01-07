@@ -317,7 +317,7 @@ pub const js = if (builtin.cpu.arch == .wasm32) @import("js") else struct {
     }
 };
 
-const zx = @import("../root.zig");
+const zx = @import("../../root.zig");
 const vtree_mod = @import("vtree.zig");
 
 const std = @import("std");

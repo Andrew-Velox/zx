@@ -466,11 +466,11 @@ const std = @import("std");
 const builtin = @import("builtin");
 const httpz = @import("httpz");
 const cachez = @import("cachez");
-const zx = @import("root.zig");
+const zx = @import("../../root.zig");
 const module_config = @import("zx_info");
-const Constant = @import("./constant.zig");
-const Handler = @import("runtime/server/handler.zig").Handler;
-const CacheConfig = @import("runtime/server/handler.zig").CacheConfig;
+const Constant = @import("../../constant.zig");
+const Handler = @import("handler.zig").Handler;
+const CacheConfig = @import("handler.zig").CacheConfig;
 
 const Allocator = std.mem.Allocator;
 const Component = zx.Component;

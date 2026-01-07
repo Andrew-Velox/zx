@@ -1614,8 +1614,8 @@ pub fn allocInit(allocator: std.mem.Allocator) ZxContext {
 const routing = @import("routing.zig");
 
 pub const info = @import("zx_info");
-pub const Client = @import("client/Client.zig");
-pub const App = @import("app.zig").App;
+pub const Client = @import("runtime/client/Client.zig");
+pub const App = @import("runtime/server/app.zig").App;
 
 pub const Allocator = std.mem.Allocator;
 
