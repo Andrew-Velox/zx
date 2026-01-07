@@ -469,8 +469,8 @@ const cachez = @import("cachez");
 const zx = @import("root.zig");
 const module_config = @import("zx_info");
 const Constant = @import("./constant.zig");
-const Handler = @import("./app/handler.zig").Handler;
-const CacheConfig = @import("./app/handler.zig").CacheConfig;
+const Handler = @import("runtime/server/handler.zig").Handler;
+const CacheConfig = @import("runtime/server/handler.zig").CacheConfig;
 
 const Allocator = std.mem.Allocator;
 const Component = zx.Component;

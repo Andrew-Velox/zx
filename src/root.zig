@@ -1905,9 +1905,9 @@ pub const Platform = enum {
 /// - `windows` if running on a Windows environment
 pub const platform: Platform = if (builtin.os.tag == .freestanding) .browser else .server;
 
-pub const Headers = @import("app/Headers.zig");
-pub const Request = @import("app/Request.zig");
-pub const Response = @import("app/Response.zig");
+pub const Headers = @import("runtime/server/Headers.zig");
+pub const Request = @import("runtime/server/Request.zig");
+pub const Response = @import("runtime/server/Response.zig");
 
 /// Default std_options for zx apps.
 /// Re-export this in your main.zig:

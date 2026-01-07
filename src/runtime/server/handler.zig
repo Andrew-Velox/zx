@@ -958,7 +958,7 @@ pub const Handler = struct {
 const std = @import("std");
 const builtin = @import("builtin");
 const cachez = @import("cachez");
-const zx = @import("../root.zig");
+const zx = @import("../../root.zig");
 const httpz_adapter = @import("adapter.zig");
 
 const Allocator = std.mem.Allocator;
