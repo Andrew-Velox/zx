@@ -3,9 +3,6 @@ var sharedCount = zx.Signal(i32).init(0);
 pub fn Counter(ctx: *zx.ComponentCtx(struct { initial: i32 })) ?zx.Component {
     const count = ctx.Signal(i32).init(ctx.props.initial);
 
-    // if (true) return .none;
-    // if (true) return null;
-
     return (
         <div @allocator={ctx.allocator}>
             <h5>Component: {count.signal}</h5>
@@ -25,32 +22,11 @@ fn zero(_: i32) i32 {
 }
 fn increment(x: i32) i32 {
     sharedCount.set(sharedCount.get() + 1);
-    _ = zx.fetch(.wasm(&onFetchComplete), zx.client_allocator, "", .{}) catch {};
     return x + 1;
 }
 fn decrement(x: i32) i32 {
     return x - 1;
 }
-
-/// Callback for fetch completion
-fn onFetchComplete(response: ?*zx.Fetch.Response, err: ?zx.Fetch.FetchError) void {
-    if (err) |e| {
-        std.log.err("Fetch error!", .{});
-        std.log.err("Fetch error: {s}", .{@errorName(e)});
-        return;
-    }
-
-    if (response) |res| {
-        defer res.deinit();
-        const text = res.text() catch |e| {
-            std.log.err("Fetch text error: {s}", .{@errorName(e)});
-            return;
-        };
-        std.log.info("Fetch completed! Response:", .{});
-        std.log.info("Fetch text: {s}", .{text});
-    }
-}
-
 
 const zx = @import("zx");
 const std = @import("std");
