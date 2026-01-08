@@ -91,7 +91,13 @@ fn formatFromStdin(allocator: std.mem.Allocator, writer: *std.Io.Writer) !void {
     const input = try buffer.toOwnedSliceSentinel(0);
     defer allocator.free(input);
 
-    var format_result = try zx.Ast.fmt(allocator, input);
+    var format_result = zx.Ast.fmt(allocator, input) catch |err| switch (err) {
+        error.TreeHasErrors => {
+            log.err("Cannot format: source contains syntax errors\n", .{});
+            return;
+        },
+        else => return err,
+    };
     defer format_result.deinit(allocator);
 
     try writer.writeAll(format_result.source);
@@ -119,7 +125,13 @@ fn formatFile(
     const source_z = try allocator.dupeZ(u8, source);
     defer allocator.free(source_z);
 
-    var format_result = try zx.Ast.fmt(allocator, source_z);
+    var format_result = zx.Ast.fmt(allocator, source_z) catch |err| switch (err) {
+        error.TreeHasErrors => {
+            log.err("Skipping {s}: source contains syntax errors\n", .{full_path});
+            return;
+        },
+        else => return err,
+    };
     defer format_result.deinit(allocator);
 
     if (use_stdout) {
@@ -179,6 +191,10 @@ fn formatDir(
         var format_result = zx.Ast.fmt(allocator, source_z) catch |err| switch (err) {
             error.ParseError => {
                 log.err("Error formatting {s}: {}\n", .{ full_path, err });
+                continue;
+            },
+            error.TreeHasErrors => {
+                log.err("Skipping {s}: source contains syntax errors\n", .{full_path});
                 continue;
             },
             else => return err,

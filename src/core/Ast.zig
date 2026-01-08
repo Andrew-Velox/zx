@@ -6,6 +6,11 @@ pub fn fmt(allocator: std.mem.Allocator, source: [:0]const u8) !FmtResult {
     var parser_result = try Parser.parse(arena, source);
     defer parser_result.deinit(allocator);
 
+    // Don't format if tree has syntax errors
+    if (parser_result.tree.rootNode().hasError()) {
+        return error.TreeHasErrors;
+    }
+
     const render_result = try parser_result.renderAlloc(arena, .{ .mode = .zx, .sourcemap = false, .path = null });
     const formatted_sourcez = try allocator.dupeZ(u8, render_result.source);
 

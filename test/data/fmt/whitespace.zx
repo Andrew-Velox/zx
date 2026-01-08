@@ -4,9 +4,9 @@ pub fn FmtWhitespace(allocator: zx.Allocator) zx.Component {
             <span>| </span>
             <span> |</span>
             <span> | </span>
-            <span>|   </span>
-            <span>   |</span>
-            <span>   |   </span>
+            <span>| </span>
+            <span> |</span>
+            <span> | </span>
             <span>
                 |
             </span>

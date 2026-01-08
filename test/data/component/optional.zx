@@ -15,5 +15,4 @@ pub fn Null(_: *zx.ComponentContext) ?zx.Component {
     if (true) return null;
 }
 
-
 const zx = @import("zx");

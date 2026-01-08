@@ -20,4 +20,3 @@ pub fn Counter(ctx: *zx.ComponentCtx(CounterProps)) zx.Component {
 }
 
 const zx = @import("zx");
-
