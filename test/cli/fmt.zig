@@ -274,7 +274,6 @@ test "whitespace" {
 }
 
 test "zx_comments" {
-    if (true) return error.Todo;
     try test_fmt("escaping/comments");
 }
 

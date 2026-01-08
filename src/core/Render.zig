@@ -307,6 +307,11 @@ pub fn renderNodeWithContext(
             // Template strings are rendered as-is from source
             try renderTemplateString(self, node, w);
         },
+        .comment => {
+            // Comments are rendered as-is from source (trimmed of leading whitespace
+            // since indentation is handled separately)
+            try renderComment(self, node, w);
+        },
         else => {
             try renderSourceWithChildren(self, node, w, ctx);
         },
@@ -571,6 +576,10 @@ fn renderElement(
     const has_meaningful_content = blk: {
         for (content_nodes.items) |child| {
             const child_kind = NodeKind.fromNode(child);
+            // Comments are meaningful content that should preserve vertical layout
+            if (child_kind == .comment) {
+                break :blk true;
+            }
             if (child_kind == .zx_child) {
                 // Check if zx_child has meaningful content
                 const cc = child.childCount();
@@ -642,6 +651,22 @@ fn renderElement(
             }
             try renderChildInner(self, child, w, ctx, !is_vertical or newline_count == 0);
             ctx.suppress_leading_space = false; // Reset just in case
+            last_content_end = child.endByte();
+            rendered_any = true;
+        } else if (child_kind == .comment) {
+            // Comments need proper newline handling like zx_child
+            const newline_count = countNewlines(self.source, last_content_end, child.startByte());
+
+            // Comments should always be on their own line in vertical mode
+            if (is_vertical and (!rendered_any or newline_count > 0)) {
+                try w.writeAll("\n");
+                // Add one extra newline if there was a blank line in source
+                if (newline_count > 1 and rendered_any) {
+                    try w.writeAll("\n");
+                }
+                try ctx.writeIndent(w);
+            }
+            try renderNodeWithContext(self, child, w, ctx);
             last_content_end = child.endByte();
             rendered_any = true;
         } else {
@@ -825,6 +850,23 @@ fn renderTemplateString(
 
     // Write the template string exactly as it appears in source
     try w.writeAll(self.source[start_byte..end_byte]);
+}
+
+/// Render comment: // ...
+/// Comments are rendered trimmed of leading whitespace since indentation is handled by the caller
+fn renderComment(
+    self: *Ast,
+    node: ts.Node,
+    w: *std.io.Writer,
+) !void {
+    const start_byte = node.startByte();
+    const end_byte = node.endByte();
+    if (start_byte >= end_byte or end_byte > self.source.len) return;
+
+    const comment_text = self.source[start_byte..end_byte];
+    // Trim leading whitespace (indentation is handled separately)
+    const trimmed = std.mem.trimLeft(u8, comment_text, &std.ascii.whitespace);
+    try w.writeAll(trimmed);
 }
 
 fn countNewlines(source: []const u8, start: usize, end: usize) usize {

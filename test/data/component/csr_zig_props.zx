@@ -1,0 +1,23 @@
+/// Test: CSR Zig component with props passed from server to client
+pub fn Page(allocator: zx.Allocator) zx.Component {
+    return (
+        <main @allocator={allocator}>
+            <Counter @rendering={.client} initial={5} label="Main Counter" />
+            <Counter @rendering={.client} initial={10} label="Secondary" />
+            <Counter @rendering={.client} initial={0} />
+        </main>
+    );
+}
+
+const CounterProps = struct { initial: i32 = 0, label: []const u8 = "Count" };
+pub fn Counter(ctx: *zx.ComponentCtx(CounterProps)) zx.Component {
+    return (
+        <div @allocator={ctx.allocator} class="counter">
+            <span class="label">{ctx.props.label}</span>
+            <span class="value">{ctx.props.initial}</span>
+        </div>
+    );
+}
+
+const zx = @import("zx");
+

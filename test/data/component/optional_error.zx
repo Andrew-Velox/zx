@@ -1,0 +1,19 @@
+/// Test: Components with error union of optional return type (!?Component)
+pub fn Page(allocator: zx.Allocator) zx.Component {
+    return (
+        <main @allocator={allocator}>
+            <MaybeContent show={true} />
+            <MaybeContent show={false} />
+        </main>
+    );
+}
+
+/// Error union of optional - !?Component
+const MaybeProps = struct { show: bool };
+pub fn MaybeContent(ctx: *zx.ComponentCtx(MaybeProps)) !?zx.Component {
+    if (!ctx.props.show) return null;
+    return (<div @allocator={ctx.allocator}>Shown Content</div>);
+}
+
+const zx = @import("zx");
+

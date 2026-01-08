@@ -338,6 +338,21 @@ test "component_optional" {
     try test_render("component/optional", @import("./../data/component/optional.zig").Page);
 }
 
+test "component_csr_zig_props" {
+    try test_transpile("component/csr_zig_props");
+    try test_render("component/csr_zig_props", @import("./../data/component/csr_zig_props.zig").Page);
+}
+
+test "component_error" {
+    try test_transpile("component/error_component");
+    try test_render("component/error_component", @import("./../data/component/error_component.zig").Page);
+}
+
+test "component_optional_error" {
+    try test_transpile("component/optional_error");
+    try test_render("component/optional_error", @import("./../data/component/optional_error.zig").Page);
+}
+
 test "performance > transpile" {
     if (!test_util.shouldRunSlowTest()) return;
     const MAX_TIME_MS = 50.0 * 8; // 50ms is on M1 Pro

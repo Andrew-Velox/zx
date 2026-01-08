@@ -1,0 +1,25 @@
+/// Test: Components with error union return type (!Component)
+pub fn Page(allocator: zx.Allocator) zx.Component {
+    return (
+        <main @allocator={allocator}>
+            <Fallible success={true} />
+            <FallibleCtx success={true} />
+        </main>
+    );
+}
+
+/// Error union with allocator signature
+const FallibleProps = struct { success: bool };
+pub fn Fallible(allocator: zx.Allocator, props: FallibleProps) !zx.Component {
+    if (!props.success) return error.TestError;
+    return (<div @allocator={allocator}>Success</div>);
+}
+
+/// Error union with ComponentCtx signature
+pub fn FallibleCtx(ctx: *zx.ComponentCtx(FallibleProps)) !zx.Component {
+    if (!ctx.props.success) return error.TestError;
+    return (<div @allocator={ctx.allocator}>Ctx Success</div>);
+}
+
+const zx = @import("zx");
+

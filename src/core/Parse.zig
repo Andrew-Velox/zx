@@ -64,6 +64,9 @@ pub const NodeKind = enum {
     assignment_expression,
     multiline_string,
 
+    /// Zig comment (// ...)
+    comment,
+
     /// Anonymous/unrecognized node kind
     anon,
 
