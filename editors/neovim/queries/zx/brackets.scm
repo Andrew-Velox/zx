@@ -1,1 +1,6 @@
-../../../../packages/tree-sitter-zx/queries/brackets.scm
+("(" @open ")" @close)
+("[" @open "]" @close)
+("{" @open "}" @close)
+("\"" @open "\"" @close)
+(payload "|" @open "|" @close)
+("'" @open "'" @close)

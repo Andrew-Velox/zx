@@ -1,75 +1,58 @@
 #!/bin/bash
 
-# Script to link tree-sitter-zx query files to editor directories
-# Uses relative symlinks so they work on any machine
+# Script to copy tree-sitter-zx query files to editor directories
 
 # Use current working directory (run from project root)
 PROJECT_ROOT="$(pwd)"
 
-# Source and destination directories (absolute for operations)
+# Source and destination directories
 SOURCE_DIR="$PROJECT_ROOT/packages/tree-sitter-zx/queries"
 ZED_DIR="$PROJECT_ROOT/editors/zed/languages/zx"
 NEOVIM_DIR="$PROJECT_ROOT/editors/neovim/queries/zx"
 SITE_PAGES_DIR="$PROJECT_ROOT/site/pages/docs"
-
-# Relative paths from destination to source (for portable symlinks)
-REL_PATH_EDITORS="../../../../packages/tree-sitter-zx/queries"
-REL_PATH_SITE="../../../packages/tree-sitter-zx/queries"
 
 # Ensure destination directories exist
 mkdir -p "$ZED_DIR"
 mkdir -p "$NEOVIM_DIR"
 mkdir -p "$SITE_PAGES_DIR"
 
-# Function to create symbolic links with relative paths
-link_files() {
+# Function to copy files
+copy_files() {
     local dest_dir="$1"
     local editor_name="$2"
-    local rel_path="$3"
     
-    echo "Destination directory: $dest_dir"
-    echo "Linking .scm files to $editor_name (using relative path: $rel_path)..."
+    echo "Copying .scm files to $editor_name..."
+    echo "  Destination: $dest_dir"
     
     for file in "$SOURCE_DIR"/*.scm; do
         if [ -f "$file" ]; then
             filename=$(basename "$file")
             dest_file="$dest_dir/$filename"
-            
-            # Remove existing file or link if it exists
-            if [ -e "$dest_file" ] || [ -L "$dest_file" ]; then
-                rm "$dest_file"
-                echo "  Removed existing: $filename"
-            fi
-            
-            # Create symbolic link with relative path
-            ln -s "$rel_path/$filename" "$dest_file"
-            echo "  Linked: $filename"
+            # Remove existing file or symlink first
+            rm -f "$dest_file"
+            cp "$file" "$dest_file"
+            echo "  Copied: $filename"
         fi
     done
     
     echo ""
 }
 
-# Link files to both editors
-link_files "$ZED_DIR" "Zed" "$REL_PATH_EDITORS"
-link_files "$NEOVIM_DIR" "Neovim" "$REL_PATH_EDITORS"
+# Copy files to both editors
+copy_files "$ZED_DIR" "Zed"
+copy_files "$NEOVIM_DIR" "Neovim"
 
-# Link highlights.scm to site/pages
-echo "Linking highlights.scm to site/pages (using relative path: $REL_PATH_SITE)..."
-SITE_HIGHLIGHTS="$SITE_PAGES_DIR/highlights.scm"
-if [ -e "$SITE_HIGHLIGHTS" ] || [ -L "$SITE_HIGHLIGHTS" ]; then
-    rm "$SITE_HIGHLIGHTS"
-    echo "  Removed existing: highlights.scm"
-fi
-ln -s "$REL_PATH_SITE/highlights.scm" "$SITE_HIGHLIGHTS"
-echo "  Linked: highlights.scm"
+# Copy highlights.scm to site/pages
+echo "Copying highlights.scm to site/pages..."
+rm -f "$SITE_PAGES_DIR/highlights.scm"
+cp "$SOURCE_DIR/highlights.scm" "$SITE_PAGES_DIR/highlights.scm"
+echo "  Copied: highlights.scm"
 echo ""
 
-echo "Done! All .scm files have been linked."
+echo "Done! All .scm files have been copied."
 echo ""
 echo "Source: $SOURCE_DIR"
 echo "Destinations:"
 echo "  - $ZED_DIR"
 echo "  - $NEOVIM_DIR"
 echo "  - $SITE_PAGES_DIR (highlights.scm only)"
-
