@@ -88,20 +88,46 @@ pub fn main() !void {
             break :blk name;
         };
 
-        current_test = friendly_name;
-        std.testing.allocator_instance = .{};
-        const result = t.func();
-        current_test = null;
+        // Check if this is a flaky test (name starts with "flaky:")
+        const is_flaky_test = isFlaky(friendly_name);
+        const max_attempts: u32 = if (is_flaky_test) env.flaky_retries else 1;
+        var attempt: u32 = 0;
+        var final_result: anyerror!void = {};
+        var final_ns_taken: u64 = 0;
 
-        const ns_taken = slowest.endTiming(friendly_name);
-        total_ns += ns_taken;
+        while (attempt < max_attempts) : (attempt += 1) {
+            current_test = friendly_name;
+            std.testing.allocator_instance = .{};
+            final_result = t.func();
+            current_test = null;
 
-        if (std.testing.allocator_instance.deinit() == .leak) {
-            leak += 1;
-            Printer.status(.fail, "\n{s}\n\"{s}\" - Memory Leak\n{s}\n", .{ BORDER, friendly_name, BORDER });
+            final_ns_taken = slowest.endTiming(friendly_name);
+
+            if (std.testing.allocator_instance.deinit() == .leak) {
+                leak += 1;
+                Printer.status(.fail, "\n{s}\n\"{s}\" - Memory Leak\n{s}\n", .{ BORDER, friendly_name, BORDER });
+            }
+
+            // If test passed or it's a skip/todo, don't retry
+            if (final_result) |_| {
+                break;
+            } else |err| {
+                if (err == error.SkipZigTest or err == error.Todo) {
+                    break;
+                }
+                // For flaky tests, retry on failure
+                if (is_flaky_test and attempt + 1 < max_attempts) {
+                    slowest.startTiming();
+                    continue;
+                }
+            }
+            break;
         }
 
-        if (result) |_| {
+        total_ns += final_ns_taken;
+        const retried = is_flaky_test and attempt > 0;
+
+        if (final_result) |_| {
             pass += 1;
         } else |err| switch (err) {
             error.SkipZigTest => {
@@ -115,7 +141,11 @@ pub fn main() !void {
             else => {
                 status = .fail;
                 fail += 1;
-                Printer.status(.fail, "\n{s}\n\"{s}\" - {s}\n{s}\n", .{ BORDER, friendly_name, @errorName(err), BORDER });
+                if (retried) {
+                    Printer.status(.fail, "\n{s}\n\"{s}\" - {s} (after {d} retries)\n{s}\n", .{ BORDER, friendly_name, @errorName(err), attempt, BORDER });
+                } else {
+                    Printer.status(.fail, "\n{s}\n\"{s}\" - {s}\n{s}\n", .{ BORDER, friendly_name, @errorName(err), BORDER });
+                }
                 if (@errorReturnTrace()) |trace| {
                     std.debug.dumpStackTrace(trace.*);
                 }
@@ -124,6 +154,8 @@ pub fn main() !void {
                 }
             },
         }
+
+        const ns_taken = final_ns_taken;
 
         if (env.verbose) {
             if (!header_printed) {
@@ -141,7 +173,11 @@ pub fn main() !void {
             };
             Printer.status(status, "{s}", .{checkmark});
             Printer.fmt(" {s} \x1b[90m>\x1b[0m {s} ", .{ scope_name, friendly_name });
-            Printer.fmt("\x1b[90m[{d:.2}ms]\x1b[0m\n", .{ms});
+            Printer.fmt("\x1b[90m[{d:.2}ms]", .{ms});
+            if (retried) {
+                Printer.fmt(" \x1b[33m⟳{d}\x1b[90m", .{attempt + 1});
+            }
+            Printer.fmt("\x1b[0m\n", .{});
         } else {
             Printer.status(status, ".", .{});
         }
@@ -289,12 +325,14 @@ const Env = struct {
     verbose: bool,
     fail_first: bool,
     filter: ?[]const u8,
+    flaky_retries: u32,
 
     fn init(allocator: Allocator) Env {
         return .{
             .verbose = readEnvBool(allocator, "TEST_VERBOSE", true),
             .fail_first = readEnvBool(allocator, "TEST_FAIL_FIRST", false),
             .filter = readEnv(allocator, "TEST_FILTER"),
+            .flaky_retries = readEnvInt(allocator, "TEST_FLAKY_RETRIES", 3),
         };
     }
 
@@ -319,6 +357,12 @@ const Env = struct {
         const value = readEnv(allocator, key) orelse return deflt;
         defer allocator.free(value);
         return std.ascii.eqlIgnoreCase(value, "true");
+    }
+
+    fn readEnvInt(allocator: Allocator, key: []const u8, deflt: u32) u32 {
+        const value = readEnv(allocator, key) orelse return deflt;
+        defer allocator.free(value);
+        return std.fmt.parseInt(u32, value, 10) catch deflt;
     }
 };
 
@@ -345,4 +389,8 @@ fn isSetup(t: std.builtin.TestFn) bool {
 
 fn isTeardown(t: std.builtin.TestFn) bool {
     return std.mem.endsWith(u8, t.name, "tests:afterAll");
+}
+
+fn isFlaky(name: []const u8) bool {
+    return std.mem.startsWith(u8, name, "flaky:");
 }

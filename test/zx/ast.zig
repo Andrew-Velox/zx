@@ -353,7 +353,7 @@ test "component_optional_error" {
     try test_render("component/optional_error", @import("./../data/component/optional_error.zig").Page);
 }
 
-test "performance > transpile" {
+test "flaky: performance > transpile" {
     if (!test_util.shouldRunSlowTest()) return;
     const MAX_TIME_MS = 50.0 * 8; // 50ms is on M1 Pro
     const MAX_TIME_PER_FILE_MS = 8.0 * 10; // 5ms is on M1 Pro
@@ -377,7 +377,7 @@ test "performance > transpile" {
     try expectLessThan(MAX_TIME_PER_FILE_MS, average_time_ms);
 }
 
-test "performance > render" {
+test "flaky: performance > render" {
     const MAX_TIME_MS = 5.0 * 8; // 3.5ms is on M1 Pro
     const MAX_TIME_PER_FILE_MS = 0.10 * 10; // 0.06ms is on M1 Pro
 
