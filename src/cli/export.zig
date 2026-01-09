@@ -117,7 +117,8 @@ fn processRoute(
     var aw = std.Io.Writer.Allocating.init(allocator);
     defer aw.deinit();
 
-    const url = try std.fmt.allocPrint(allocator, "http://{s}:{d}{s}", .{ host, port, route.path });
+    const effective_host = if (std.mem.eql(u8, host, "0.0.0.0")) "127.0.0.1" else host;
+    const url = try std.fmt.allocPrint(allocator, "http://{s}:{d}{s}", .{ effective_host, port, route.path });
     defer allocator.free(url);
 
     var extra_headers: [1]std.http.Header = .{.{ .name = "x-zx-export-notfound", .value = "true" }};
