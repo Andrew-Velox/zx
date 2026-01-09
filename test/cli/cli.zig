@@ -220,7 +220,7 @@ test "init → build -t wasm" {
 }
 
 test "export" {
-    if (builtin.os.tag == .windows or !test_util.shouldRunSlowTest()) return error.SkipZigTest; // Export doesn't work on Windows yet
+    if (!test_util.shouldRunSlowTest()) return error.SkipZigTest; // Export doesn't work on Windows yet
     try test_cmd(.{
         .args = &.{"export"},
         .expected_exit_code = 0,
@@ -229,7 +229,7 @@ test "export" {
             "dist",
             "index.html",
             "about.html",
-            "assets/style.css",
+            "assets"++std.fs.path.sep_str++"style.css",
             "favicon.ico",
         },
         .expected_files = &.{
