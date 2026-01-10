@@ -283,3 +283,10 @@ pub fn dispatchCallback(callback_type: CallbackType, callback_id: u64, data_ref:
 
     return false;
 }
+
+// =============================================================================
+// WebSocket Client API (re-export from core)
+// =============================================================================
+
+/// Re-export the core WebSocket for client-side use
+pub const WebSocket = @import("../core/WebSocket.zig");

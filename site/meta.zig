@@ -100,6 +100,16 @@ pub const routes = [_]zx.App.Meta.Route{
         .page_opts = getOptions(@import(".zx/pages/examples/overview/page.zig"), zx.PageOptions),
     },
     .{
+        .path = "/examples/realtime",
+        .page = wrapPage(@import(".zx/pages/examples/realtime/page.zig").Page),
+        .page_opts = getOptions(@import(".zx/pages/examples/realtime/page.zig"), zx.PageOptions),
+    },
+    .{
+        .path = "/examples/realtime/ws",
+        .route = zx.App.Meta.route(@import(".zx/pages/examples/realtime/ws/route.zig"), null),
+        .route_opts = getOptions(@import(".zx/pages/examples/realtime/ws/route.zig"), zx.RouteOptions),
+    },
+    .{
         .path = "/api",
         .route = zx.App.Meta.route(@import(".zx/routes/api/route.zig"), null),
         .route_opts = getOptions(@import(".zx/routes/api/route.zig"), zx.RouteOptions),

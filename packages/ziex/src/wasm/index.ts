@@ -2,7 +2,7 @@ import { ZigJS } from "../../../../vendor/jsz/js/src";
 
 /**
  * ZX Client Bridge - Unified JS↔WASM communication layer
- * Handles events, fetch, timers, and other async callbacks using jsz
+ * Handles events, fetch, WebSocket, timers, and other async callbacks using jsz
  */
 export const CallbackType = {
     Event: 0,
@@ -10,11 +10,21 @@ export const CallbackType = {
     FetchError: 2,
     Timeout: 3,
     Interval: 4,
+    WebSocketOpen: 5,
+    WebSocketMessage: 6,
+    WebSocketError: 7,
+    WebSocketClose: 8,
 } as const;
 
 export type CallbackTypeValue = typeof CallbackType[keyof typeof CallbackType];
 type CallbackHandler = (callbackType: number, id: bigint, dataRef: bigint) => void;
 type FetchCompleteHandler = (fetchId: bigint, statusCode: number, bodyPtr: number, bodyLen: number, isError: number) => void;
+
+// WebSocket callback handler types
+type WsOnOpenHandler = (wsId: bigint, protocolPtr: number, protocolLen: number) => void;
+type WsOnMessageHandler = (wsId: bigint, dataPtr: number, dataLen: number, isBinary: number) => void;
+type WsOnErrorHandler = (wsId: bigint, msgPtr: number, msgLen: number) => void;
+type WsOnCloseHandler = (wsId: bigint, code: number, reasonPtr: number, reasonLen: number, wasClean: number) => void;
 
 export const jsz = new ZigJS();
 
@@ -47,6 +57,7 @@ function writeBytes(ptr: number, data: Uint8Array): void {
 export class ZxBridge {
     #exports: WebAssembly.Exports;
     #intervals: Map<bigint, number> = new Map();
+    #websockets: Map<bigint, WebSocket> = new Map();
 
     constructor(exports: WebAssembly.Exports) {
         this.#exports = exports;
@@ -58,6 +69,23 @@ export class ZxBridge {
 
     get #fetchCompleteHandler(): FetchCompleteHandler | undefined {
         return this.#exports.__zx_fetch_complete as FetchCompleteHandler | undefined;
+    }
+
+    // WebSocket callback handlers
+    get #wsOnOpenHandler(): WsOnOpenHandler | undefined {
+        return this.#exports.__zx_ws_onopen as WsOnOpenHandler | undefined;
+    }
+
+    get #wsOnMessageHandler(): WsOnMessageHandler | undefined {
+        return this.#exports.__zx_ws_onmessage as WsOnMessageHandler | undefined;
+    }
+
+    get #wsOnErrorHandler(): WsOnErrorHandler | undefined {
+        return this.#exports.__zx_ws_onerror as WsOnErrorHandler | undefined;
+    }
+
+    get #wsOnCloseHandler(): WsOnCloseHandler | undefined {
+        return this.#exports.__zx_ws_onclose as WsOnCloseHandler | undefined;
     }
 
     /** Invoke the unified callback handler */
@@ -183,6 +211,149 @@ export class ZxBridge {
         }
     }
 
+    // ========================================================================
+    // WebSocket API
+    // ========================================================================
+
+    /**
+     * Create and connect a WebSocket.
+     * Calls __zx_ws_onopen, __zx_ws_onmessage, __zx_ws_onerror, __zx_ws_onclose.
+     */
+    wsConnect(
+        wsId: bigint,
+        urlPtr: number,
+        urlLen: number,
+        protocolsPtr: number,
+        protocolsLen: number
+    ): void {
+        const url = readString(urlPtr, urlLen);
+        const protocolsStr = protocolsLen > 0 ? readString(protocolsPtr, protocolsLen) : '';
+        const protocols = protocolsStr ? protocolsStr.split(',').map(p => p.trim()).filter(Boolean) : undefined;
+
+        try {
+            const ws = protocols && protocols.length > 0 
+                ? new WebSocket(url, protocols)
+                : new WebSocket(url);
+
+            ws.binaryType = 'arraybuffer';
+
+            ws.onopen = () => {
+                const handler = this.#wsOnOpenHandler;
+                if (!handler) return;
+
+                // Write protocol to WASM memory
+                const protocol = ws.protocol || '';
+                const { ptr, len } = this.#writeStringToWasm(protocol);
+                handler(wsId, ptr, len);
+            };
+
+            ws.onmessage = (event: MessageEvent) => {
+                const handler = this.#wsOnMessageHandler;
+                if (!handler) return;
+
+                const isBinary = event.data instanceof ArrayBuffer;
+                let data: Uint8Array;
+
+                if (isBinary) {
+                    data = new Uint8Array(event.data as ArrayBuffer);
+                } else {
+                    data = new TextEncoder().encode(event.data as string);
+                }
+
+                const { ptr, len } = this.#writeBytesToWasm(data);
+                handler(wsId, ptr, len, isBinary ? 1 : 0);
+            };
+
+            ws.onerror = (event: Event) => {
+                const handler = this.#wsOnErrorHandler;
+                if (!handler) return;
+
+                const msg = 'WebSocket error';
+                const { ptr, len } = this.#writeStringToWasm(msg);
+                handler(wsId, ptr, len);
+            };
+
+            ws.onclose = (event: CloseEvent) => {
+                const handler = this.#wsOnCloseHandler;
+                if (!handler) return;
+
+                const reason = event.reason || '';
+                const { ptr, len } = this.#writeStringToWasm(reason);
+                handler(wsId, event.code, ptr, len, event.wasClean ? 1 : 0);
+
+                // Clean up
+                this.#websockets.delete(wsId);
+            };
+
+            this.#websockets.set(wsId, ws);
+        } catch (error) {
+            // Connection failed immediately
+            const handler = this.#wsOnErrorHandler;
+            if (handler) {
+                const msg = error instanceof Error ? error.message : 'WebSocket connection failed';
+                const { ptr, len } = this.#writeStringToWasm(msg);
+                handler(wsId, ptr, len);
+            }
+        }
+    }
+
+    /** Send data over WebSocket */
+    wsSend(wsId: bigint, dataPtr: number, dataLen: number, isBinary: number): void {
+        const ws = this.#websockets.get(wsId);
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+        const memory = new Uint8Array(jsz.memory!.buffer);
+        const data = memory.slice(dataPtr, dataPtr + dataLen);
+
+        if (isBinary) {
+            ws.send(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+        } else {
+            ws.send(new TextDecoder().decode(data));
+        }
+    }
+
+    /** Close WebSocket connection */
+    wsClose(wsId: bigint, code: number, reasonPtr: number, reasonLen: number): void {
+        const ws = this.#websockets.get(wsId);
+        if (!ws) return;
+
+        const reason = reasonLen > 0 ? readString(reasonPtr, reasonLen) : undefined;
+
+        try {
+            if (reason) {
+                ws.close(code, reason);
+            } else {
+                ws.close(code);
+            }
+        } catch {
+            // Invalid code or reason, just force close
+            ws.close();
+        }
+    }
+
+    /** Write a string to WASM memory, returning pointer and length */
+    #writeStringToWasm(str: string): { ptr: number; len: number } {
+        const encoded = new TextEncoder().encode(str);
+        return this.#writeBytesToWasm(encoded);
+    }
+
+    /** Write bytes to WASM memory, returning pointer and length */
+    #writeBytesToWasm(data: Uint8Array): { ptr: number; len: number } {
+        const allocFn = this.#exports.__zx_alloc as ((size: number) => number) | undefined;
+        let ptr = 0;
+
+        if (allocFn) {
+            ptr = allocFn(data.length);
+        } else {
+            // Fallback: use a fixed buffer area based on current time
+            const heapBase = (this.#exports.__heap_base as WebAssembly.Global)?.value ?? 0x10000;
+            ptr = heapBase + (Date.now() % 256) * 0x1000; // 4KB per allocation
+        }
+
+        writeBytes(ptr, data);
+        return { ptr, len: data.length };
+    }
+
     /** Handle a DOM event (called by event delegation) */
     eventbridge(velementId: bigint, eventTypeId: number, event: Event): void {
         const eventRef = storeValueGetRef(event);
@@ -225,6 +396,22 @@ export class ZxBridge {
                 },
                 _clearInterval: (callbackId: bigint) => {
                     bridgeRef.current?.clearInterval(callbackId);
+                },
+                // WebSocket API
+                _wsConnect: (
+                    wsId: bigint,
+                    urlPtr: number,
+                    urlLen: number,
+                    protocolsPtr: number,
+                    protocolsLen: number
+                ) => {
+                    bridgeRef.current?.wsConnect(wsId, urlPtr, urlLen, protocolsPtr, protocolsLen);
+                },
+                _wsSend: (wsId: bigint, dataPtr: number, dataLen: number, isBinary: number) => {
+                    bridgeRef.current?.wsSend(wsId, dataPtr, dataLen, isBinary);
+                },
+                _wsClose: (wsId: bigint, code: number, reasonPtr: number, reasonLen: number) => {
+                    bridgeRef.current?.wsClose(wsId, code, reasonPtr, reasonLen);
                 },
             },
         };

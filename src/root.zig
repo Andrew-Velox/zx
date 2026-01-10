@@ -2048,8 +2048,30 @@ pub const EventContext = struct {
         return client.Event.fromRef(self.event_ref);
     }
 
+    /// Get the underlying js.Object with data loaded (value, key, etc)
+    pub fn getEventWithData(self: EventContext, allocator: Allocator) client.Event {
+        return client.Event.fromRefWithData(allocator, self.event_ref);
+    }
+
     pub fn preventDefault(self: EventContext) void {
         self.getEvent().preventDefault();
+    }
+
+    /// Get the input value from event.target.value
+    pub fn value(self: EventContext) ?[]const u8 {
+        if (platform != .browser) return null;
+        const real_js = @import("js");
+        const event = self.getEvent();
+        const target = event.ref.get(real_js.Object, "target") catch return null;
+        return target.getAlloc(real_js.String, client_allocator, "value") catch null;
+    }
+
+    /// Get the key from keyboard event
+    pub fn key(self: EventContext) ?[]const u8 {
+        if (platform != .browser) return null;
+        const real_js = @import("js");
+        const event = self.getEvent();
+        return event.ref.getAlloc(real_js.String, client_allocator, "key") catch null;
     }
 };
 
@@ -2203,6 +2225,7 @@ pub const Headers = @import("runtime/core/Headers.zig");
 pub const Request = @import("runtime/core/Request.zig");
 pub const Response = @import("runtime/core/Response.zig");
 pub const Fetch = @import("runtime/core/Fetch.zig");
+pub const WebSocket = @import("runtime/core/WebSocket.zig");
 
 /// Io determines how fetch operations are executed.
 /// - `Io.blocking` - Blocks until complete (server-side)

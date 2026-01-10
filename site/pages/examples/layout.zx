@@ -3,6 +3,7 @@ pub fn Layout(ctx: zx.LayoutContext, children: zx.Component) zx.Component {
         <div @allocator={ctx.arena}>
             <Sidebar allocator={ctx.arena} categories={&categories} toc={&toc_links} children={children} />
             <script src=`/assets/docs.js?v={zx.info.version_string}` defer="true"></script>
+            <script src=`/assets/main.js?v={zx.info.version_string}` defer="true"></script>
         </div>
     );
 }
@@ -45,6 +46,7 @@ const categories = [_]SidebarProps.Category{
             .{ .title = "React.js Demo", .href = "/examples/react" },
             .{ .title = "Hydration Demo", .href = "/examples/wasm/hydration" },
             .{ .title = "Progress Demo", .href = "/examples/wasm/progress" },
+            .{ .title = "WebSocket Demo", .href = "/examples/realtime/ws" },
         },
     },
 };
