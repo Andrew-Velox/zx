@@ -1917,6 +1917,11 @@ pub const ErrorContext = routing.ErrorContext;
 pub const RouteContext = routing.RouteContext;
 pub const SocketContext = routing.SocketContext;
 pub const SocketCtx = routing.SocketCtx;
+pub const SocketOpenContext = routing.SocketOpenContext;
+pub const SocketOpenCtx = routing.SocketOpenCtx;
+pub const SocketCloseContext = routing.SocketCloseContext;
+pub const SocketCloseCtx = routing.SocketCloseCtx;
+pub const SocketMessageType = routing.SocketMessageType;
 pub const Socket = routing.Socket;
 
 /// Compute the merged type of two structs for props spreading

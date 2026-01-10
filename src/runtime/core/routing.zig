@@ -201,13 +201,26 @@ pub const RouteContext = struct {
     }
 };
 
+/// Message type for WebSocket messages (text vs binary)
+pub const SocketMessageType = enum {
+    text,
+    binary,
+};
+
+/// Context for WebSocket message handlers (Socket function).
+/// This is the primary handler called for each message received.
 pub const SocketContext = SocketCtx(void);
+
+/// Context for WebSocket handlers with custom data passed during upgrade.
+/// Use SocketCtx(YourDataType) to access data passed via ctx.socket.upgrade(data).
 pub fn SocketCtx(comptime DataType: type) type {
     return struct {
         /// The WebSocket connection for sending messages
         socket: Socket,
         /// The client message data (received from WebSocket)
         message: []const u8,
+        /// The message type (text or binary)
+        message_type: SocketMessageType,
         /// Custom data passed from upgrade handler
         data: DataType,
         /// Global allocator
@@ -217,14 +230,58 @@ pub fn SocketCtx(comptime DataType: type) type {
 
         const Self = @This();
 
-        pub fn init(socket: Socket, message: []const u8, data: DataType, alloc: std.mem.Allocator, arena: std.mem.Allocator) Self {
-            return .{
-                .socket = socket,
-                .message = message,
-                .data = data,
-                .allocator = alloc,
-                .arena = arena,
+        pub fn fmt(self: Self, comptime format: []const u8, args: anytype) ![]u8 {
+            var aw: std.Io.Writer.Allocating = .init(self.arena);
+            defer aw.deinit();
+            aw.writer.print(format, args) catch |err| switch (err) {
+                error.WriteFailed => return error.OutOfMemory,
             };
+            return aw.toOwnedSlice();
         }
+    };
+}
+
+/// Context for SocketOpen handlers (called when connection opens).
+/// Same structure as SocketCtx but without message data.
+pub const SocketOpenContext = SocketOpenCtx(void);
+
+pub fn SocketOpenCtx(comptime DataType: type) type {
+    return struct {
+        /// The WebSocket connection for sending messages
+        socket: Socket,
+        /// Custom data passed from upgrade handler
+        data: DataType,
+        /// Global allocator
+        allocator: std.mem.Allocator,
+        /// Arena allocator for request-scoped allocations
+        arena: std.mem.Allocator,
+
+        const Self = @This();
+
+        pub fn fmt(self: Self, comptime format: []const u8, args: anytype) ![]u8 {
+            var aw: std.Io.Writer.Allocating = .init(self.arena);
+            defer aw.deinit();
+            aw.writer.print(format, args) catch |err| switch (err) {
+                error.WriteFailed => return error.OutOfMemory,
+            };
+            return aw.toOwnedSlice();
+        }
+    };
+}
+
+/// Context for SocketClose handlers (called when connection closes).
+/// Same structure as SocketOpenCtx.
+pub const SocketCloseContext = SocketCloseCtx(void);
+
+pub fn SocketCloseCtx(comptime DataType: type) type {
+    return struct {
+        /// The WebSocket connection (may not be writable)
+        socket: Socket,
+        /// Custom data passed from upgrade handler
+        data: DataType,
+        /// Global allocator
+        allocator: std.mem.Allocator,
+        /// Arena allocator for request-scoped allocations
+        arena: std.mem.Allocator,
     };
 }

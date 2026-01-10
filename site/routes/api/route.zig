@@ -1,16 +1,19 @@
-pub fn Route(ctx: zx.RouteContext) !void {
-    try ctx.socket.upgrade(.{});
+pub fn GET(ctx: zx.RouteContext) !void {
+    try ctx.socket.upgrade({});
 }
 
 pub fn Socket(ctx: zx.SocketContext) !void {
     var count: usize = 0;
-    while (count < 10) {
-        const count_str = try std.fmt.allocPrint(ctx.arena, "count: {d} {s}", .{ count, ctx.message });
-        try ctx.socket.write(count_str);
-        count += 1;
-        std.Thread.sleep(1 * std.time.ns_per_s);
+
+    while (count < 10) : (count += 1) {
+        std.Thread.sleep(1000 * std.time.ns_per_ms);
+        try ctx.socket.write(
+            try ctx.fmt("You said: {s}, count {d}", .{
+                ctx.message,
+                count,
+            }),
+        );
     }
-    try ctx.socket.write(ctx.message);
 }
 
 const zx = @import("zx");

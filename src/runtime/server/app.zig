@@ -1,24 +1,36 @@
 pub const App = @This();
 
-pub const ExportType = enum { static };
-pub const ExportOptions = struct {
-    type: ExportType,
-    outdir: ?[]const u8 = "dist",
-};
-
 pub const Meta = struct {
     /// Route handler function type for API routes
     pub const RouteHandler = *const fn (ctx: zx.RouteContext) anyerror!void;
 
-    /// Socket handler function type for WebSocket connections
-    /// Takes separated parameters to support both SocketContext and SocketCtx(T)
+    /// Socket message handler function type for WebSocket connections
+    /// Called for each message received from the client
     pub const SocketHandler = *const fn (
         socket: zx.Socket,
         message: []const u8,
+        message_type: zx.SocketMessageType,
         upgrade_data: ?[]const u8,
         allocator: std.mem.Allocator,
         arena: std.mem.Allocator,
     ) anyerror!void;
+
+    /// Socket open handler function type (optional)
+    /// Called once when the WebSocket connection is established
+    pub const SocketOpenHandler = *const fn (
+        socket: zx.Socket,
+        upgrade_data: ?[]const u8,
+        allocator: std.mem.Allocator,
+        arena: std.mem.Allocator,
+    ) anyerror!void;
+
+    /// Socket close handler function type (optional)
+    /// Called once when the WebSocket connection is closed
+    pub const SocketCloseHandler = *const fn (
+        socket: zx.Socket,
+        upgrade_data: ?[]const u8,
+        allocator: std.mem.Allocator,
+    ) void;
 
     /// Custom method entry for non-standard HTTP methods
     pub const CustomMethod = struct {
@@ -28,7 +40,7 @@ pub const Meta = struct {
 
     /// Struct containing all HTTP method handlers for an API route
     pub const RouteHandlers = struct {
-        handler: ?RouteHandler = null, // Catch-all Route function
+        handler: ?RouteHandler = null, // Catch-all undefined standard HTTP method
         get: ?RouteHandler = null,
         post: ?RouteHandler = null,
         put: ?RouteHandler = null,
@@ -38,12 +50,13 @@ pub const Meta = struct {
         options: ?RouteHandler = null,
         custom_methods: ?[]const CustomMethod = null, // Arbitrary uppercase methods
         socket: ?SocketHandler = null,
+        socket_open: ?SocketOpenHandler = null,
+        socket_close: ?SocketCloseHandler = null,
     };
 
     // Standard HTTP methods to exclude from custom detection
-
     fn isStandardMethod(name: []const u8) bool {
-        const standard_methods = [_][]const u8{ "Route", "Socket", "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS" };
+        const standard_methods = [_][]const u8{ "Route", "Socket", "SocketOpen", "SocketClose", "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS" };
         for (standard_methods) |std_method| {
             if (std.mem.eql(u8, name, std_method)) return true;
         }
@@ -52,14 +65,8 @@ pub const Meta = struct {
 
     fn isAllUppercase(name: []const u8) bool {
         if (name.len == 0) return false;
-        for (name) |c| {
-            if (c >= 'a' and c <= 'z') return false;
-        }
-        // Must have at least one letter
-        for (name) |c| {
-            if (c >= 'A' and c <= 'Z') return true;
-        }
-        return false;
+        for (name) |c| if (!std.ascii.isUpper(c)) return false;
+        return true;
     }
 
     /// Comptime function to build RouteHandlers from a route module
@@ -135,66 +142,93 @@ pub const Meta = struct {
             .options = if (@hasDecl(T, "OPTIONS")) wrapRoute(T.OPTIONS) else null,
             .custom_methods = if (custom_count > 0) &custom_methods else null,
             .socket = if (@hasDecl(T, "Socket")) wrapSocket(T.Socket) else null,
+            .socket_open = if (@hasDecl(T, "SocketOpen")) wrapSocketOpen(T.SocketOpen) else null,
+            .socket_close = if (@hasDecl(T, "SocketClose")) wrapSocketClose(T.SocketClose) else null,
         };
     }
 
-    /// Wrapper to allow socket handlers to return void or !void
+    /// Wrapper to allow socket message handlers to return void or !void
     /// Supports both SocketContext (simple) and SocketCtx(T) (with custom data)
     fn wrapSocket(comptime socketFn: anytype) SocketHandler {
         const FnInfo = @typeInfo(@TypeOf(socketFn)).@"fn";
         const R = FnInfo.return_type.?;
         const CtxType = FnInfo.params[0].type.?;
+        const DataType = @TypeOf(@as(CtxType, undefined).data);
 
-        // Check if the context type is the simple SocketContext or a generic SocketCtx(T)
-        const is_simple_context = CtxType == zx.SocketContext;
+        return struct {
+            fn wrapper(socket: zx.Socket, message: []const u8, message_type: zx.SocketMessageType, upgrade_data: ?[]const u8, allocator: std.mem.Allocator, arena: std.mem.Allocator) anyerror!void {
+                const data: DataType = if (upgrade_data) |bytes|
+                    std.mem.bytesToValue(DataType, bytes[0..@sizeOf(DataType)])
+                else
+                    std.mem.zeroes(DataType);
 
-        if (is_simple_context) {
-            // Simple SocketContext - message is in ctx.data
-            return struct {
-                fn wrapper(socket: zx.Socket, message: []const u8, _: ?[]const u8, allocator: std.mem.Allocator, arena: std.mem.Allocator) anyerror!void {
-                    const ctx = zx.SocketContext{
-                        .socket = socket,
-                        .message = message,
-                        .allocator = allocator,
-                        .arena = arena,
-                        .data = void{},
-                    };
-                    if (R == void) {
-                        socketFn(ctx);
-                    } else {
-                        try socketFn(ctx);
-                    }
+                const ctx = CtxType{
+                    .socket = socket,
+                    .message = message,
+                    .message_type = message_type,
+                    .data = data,
+                    .allocator = allocator,
+                    .arena = arena,
+                };
+                if (R == void) {
+                    socketFn(ctx);
+                } else {
+                    try socketFn(ctx);
                 }
-            }.wrapper;
-        } else {
-            // Generic SocketCtx(T) - has separate message and data fields
-            // Extract the data type from the context struct
-            const DataType = @TypeOf(@as(CtxType, undefined).data);
+            }
+        }.wrapper;
+    }
 
-            return struct {
-                fn wrapper(socket: zx.Socket, message: []const u8, upgrade_data: ?[]const u8, allocator: std.mem.Allocator, arena: std.mem.Allocator) anyerror!void {
-                    // Interpret the upgrade_data bytes as the expected data type
-                    const data: DataType = if (upgrade_data) |bytes|
-                        std.mem.bytesToValue(DataType, bytes[0..@sizeOf(DataType)])
-                    else
-                        // If no data was passed but handler expects it, use zero-initialized
-                        std.mem.zeroes(DataType);
+    /// Wrapper for SocketOpen handlers
+    fn wrapSocketOpen(comptime socketOpenFn: anytype) SocketOpenHandler {
+        const FnInfo = @typeInfo(@TypeOf(socketOpenFn)).@"fn";
+        const R = FnInfo.return_type.?;
+        const CtxType = FnInfo.params[0].type.?;
+        const DataType = @TypeOf(@as(CtxType, undefined).data);
 
-                    const ctx = CtxType{
-                        .socket = socket,
-                        .message = message,
-                        .data = data,
-                        .allocator = allocator,
-                        .arena = arena,
-                    };
-                    if (R == void) {
-                        socketFn(ctx);
-                    } else {
-                        try socketFn(ctx);
-                    }
+        return struct {
+            fn wrapper(socket: zx.Socket, upgrade_data: ?[]const u8, allocator: std.mem.Allocator, arena: std.mem.Allocator) anyerror!void {
+                const data: DataType = if (upgrade_data) |bytes|
+                    std.mem.bytesToValue(DataType, bytes[0..@sizeOf(DataType)])
+                else
+                    std.mem.zeroes(DataType);
+
+                const ctx = CtxType{
+                    .socket = socket,
+                    .data = data,
+                    .allocator = allocator,
+                    .arena = arena,
+                };
+                if (R == void) {
+                    socketOpenFn(ctx);
+                } else {
+                    try socketOpenFn(ctx);
                 }
-            }.wrapper;
-        }
+            }
+        }.wrapper;
+    }
+
+    /// Wrapper for SocketClose handlers
+    fn wrapSocketClose(comptime socketCloseFn: anytype) SocketCloseHandler {
+        const CtxType = @typeInfo(@TypeOf(socketCloseFn)).@"fn".params[0].type.?;
+        const DataType = @TypeOf(@as(CtxType, undefined).data);
+
+        return struct {
+            fn wrapper(socket: zx.Socket, upgrade_data: ?[]const u8, allocator: std.mem.Allocator) void {
+                const data: DataType = if (upgrade_data) |bytes|
+                    std.mem.bytesToValue(DataType, bytes[0..@sizeOf(DataType)])
+                else
+                    std.mem.zeroes(DataType);
+
+                const ctx = CtxType{
+                    .socket = socket,
+                    .data = data,
+                    .allocator = allocator,
+                    .arena = allocator,
+                };
+                socketCloseFn(ctx);
+            }
+        }.wrapper;
     }
 
     /// Wrapper to allow routes to return void or !void

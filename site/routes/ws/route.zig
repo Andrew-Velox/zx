@@ -1,30 +1,33 @@
 const SocketData = struct {
     user_id: u32,
-    is_admin: bool,
 };
 
+/// HTTP GET handler - upgrades the connection to WebSocket
 pub fn GET(ctx: zx.RouteContext) !void {
     try ctx.socket.upgrade(SocketData{
         .user_id = 123,
-        .is_admin = true,
     });
 }
 
+/// Called for each message received from the client
 pub fn Socket(ctx: zx.SocketCtx(SocketData)) !void {
-    var count: usize = 0;
+    try ctx.socket.write(try ctx.fmt(
+        "Echo: {s} (user_id: {d}, type: {s})",
+        .{ ctx.message, ctx.data.user_id, @tagName(ctx.message_type) },
+    ));
+}
 
-    while (count < 10) : (count += 1) {
-        std.Thread.sleep(1 * std.time.ns_per_s);
+/// Optional: Called once when the WebSocket connection opens
+pub fn SocketOpen(ctx: zx.SocketOpenCtx(SocketData)) !void {
+    try ctx.socket.write(try ctx.fmt(
+        "Welcome! user_id: {d}",
+        .{ctx.data.user_id},
+    ));
+}
 
-        const count_str = try std.fmt.allocPrint(
-            ctx.allocator,
-            "Socket: {d}, user_id: {d}, is_admin: {}, you said: {s}",
-            .{ count, ctx.data.user_id, ctx.data.is_admin, ctx.message },
-        );
-
-        try ctx.socket.write(count_str);
-    }
-    ctx.socket.close();
+/// Optional: Called once when the WebSocket connection closes
+pub fn SocketClose(ctx: zx.SocketCloseCtx(SocketData)) void {
+    std.log.info("WebSocket closed for user_id: {d}", .{ctx.data.user_id});
 }
 
 const zx = @import("zx");

@@ -611,6 +611,8 @@ pub const Handler = struct {
                 if (upgrade_ctx.upgraded) {
                     const ws_ctx = WebsocketContext{
                         .socket_handler = socket_handler,
+                        .socket_open_handler = handlers.socket_open,
+                        .socket_close_handler = handlers.socket_close,
                         .allocator = allocator,
                         .upgrade_data = upgrade_ctx.upgrade_data,
                     };
@@ -985,9 +987,11 @@ pub const Handler = struct {
     }
 
     /// Context passed when upgrading to WebSocket
-    /// Contains the socket handler function and allocator
+    /// Contains the socket handler functions and allocator
     pub const WebsocketContext = struct {
         socket_handler: ?App.Meta.SocketHandler = null,
+        socket_open_handler: ?App.Meta.SocketOpenHandler = null,
+        socket_close_handler: ?App.Meta.SocketCloseHandler = null,
         allocator: std.mem.Allocator = std.heap.page_allocator,
         /// Copied user data bytes passed during upgrade
         upgrade_data: ?[]const u8 = null,
@@ -996,6 +1000,8 @@ pub const Handler = struct {
     pub const WebsocketHandler = struct {
         conn: *httpz.websocket.Conn,
         socket_handler: ?App.Meta.SocketHandler,
+        socket_open_handler: ?App.Meta.SocketOpenHandler,
+        socket_close_handler: ?App.Meta.SocketCloseHandler,
         allocator: std.mem.Allocator,
         upgrade_data: ?[]const u8,
 
@@ -1003,25 +1009,55 @@ pub const Handler = struct {
             return .{
                 .conn = conn,
                 .socket_handler = ctx.socket_handler,
+                .socket_open_handler = ctx.socket_open_handler,
+                .socket_close_handler = ctx.socket_close_handler,
                 .allocator = ctx.allocator,
                 .upgrade_data = ctx.upgrade_data,
             };
         }
 
-        pub fn clientMessage(self: *WebsocketHandler, allocator: Allocator, data: []const u8) !void {
-            if (self.socket_handler) |handler| {
-                // Route-based socket handler
-                const socket = zx.Socket{
-                    .backend_ctx = @ptrCast(self.conn),
-                    .vtable = &socket_vtable,
+        /// Called after the WebSocket connection is established
+        pub fn afterInit(self: *WebsocketHandler) !void {
+            if (self.socket_open_handler) |handler| {
+                const socket = self.createSocket();
+                handler(socket, self.upgrade_data, self.allocator, self.allocator) catch |err| {
+                    log.err("SocketOpen handler error: {}", .{err});
                 };
-                handler(socket, data, self.upgrade_data, self.allocator, allocator) catch |err| {
+            }
+        }
+
+        /// Called when a text or binary message is received from the client
+        pub fn clientMessage(self: *WebsocketHandler, _: Allocator, data: []const u8, message_type: httpz.websocket.MessageTextType) !void {
+            const msg_type: zx.SocketMessageType = switch (message_type) {
+                .text => .text,
+                .binary => .binary,
+            };
+
+            if (self.socket_handler) |handler| {
+                const socket = self.createSocket();
+                handler(socket, data, msg_type, self.upgrade_data, self.allocator, self.allocator) catch |err| {
                     log.err("Socket handler error: {}", .{err});
                 };
             } else {
-                // Default echo behavior for /ws endpoint
+                // Default echo behavior when no handler defined
                 try self.conn.write(data);
             }
+        }
+
+        /// Called when the connection is being closed (for any reason)
+        pub fn close(self: *WebsocketHandler) void {
+            if (self.socket_close_handler) |handler| {
+                const socket = self.createSocket();
+                handler(socket, self.upgrade_data, self.allocator);
+            }
+        }
+
+        /// Create a Socket interface for the current connection
+        fn createSocket(self: *WebsocketHandler) zx.Socket {
+            return zx.Socket{
+                .backend_ctx = @ptrCast(self.conn),
+                .vtable = &socket_vtable,
+            };
         }
 
         const socket_vtable = zx.Socket.VTable{
