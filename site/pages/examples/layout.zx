@@ -9,7 +9,7 @@ pub fn Layout(ctx: zx.LayoutContext, children: zx.Component) zx.Component {
 }
 const categories = [_]SidebarProps.Category{
     .{
-        .title = "BASICS",
+        .title = "Examples",
         .sections = &[_]SidebarProps.Section{
             .{ .title = "Overview", .href = "/examples" },
             .{
@@ -28,25 +28,23 @@ const categories = [_]SidebarProps.Category{
                     .{ .href = "/examples#form-handling", .text = "Form Handling" },
                 },
             },
+            .{
+                .title = "Caching",
+                .href = "/examples#caching",
+            },
         },
     },
     .{
-        .title = "ADVANCED",
+        .title = "Example Applications",
         .sections = &[_]SidebarProps.Section{
-            .{ .title = "Caching", .href = "/examples#caching" },
+            .{ .title = "Counter", .href = "/examples/wasm/simple" },
             .{ .title = "Streaming", .href = "/examples/streaming" },
-        },
-    },
-    .{
-        .title = "CSR (Experimental)",
-        .sections = &[_]SidebarProps.Section{
-            .{ .title = "Counter App", .href = "/examples/wasm/simple" },
             .{ .title = "Todo App", .href = "/examples/wasm" },
-            .{ .title = "Timer Demo", .href = "/examples/wasm/async" },
-            .{ .title = "React.js Demo", .href = "/examples/react" },
-            .{ .title = "Hydration Demo", .href = "/examples/wasm/hydration" },
-            .{ .title = "Progress Demo", .href = "/examples/wasm/progress" },
-            .{ .title = "WebSocket Demo", .href = "/examples/realtime/ws" },
+            .{ .title = "Async Timer", .href = "/examples/wasm/async" },
+            .{ .title = "React Integration", .href = "/examples/react" },
+            .{ .title = "Hydration", .href = "/examples/wasm/hydration" },
+            .{ .title = "Progress Bar", .href = "/examples/wasm/progress" },
+            .{ .title = "Realtime Chat", .href = "/examples/realtime" },
         },
     },
 };

@@ -282,9 +282,8 @@ fn isNoClosing(tag: ElementTag) bool {
     return std.mem.indexOfScalar(ElementTag, NO_CHILDREN_ONLY, tag) != null;
 }
 
-/// Escape HTML attribute values to prevent XSS attacks
 /// Escapes: & < > " '
-fn escapeAttributeValueToWriter(writer: *std.Io.Writer, value: []const u8) !void {
+fn escapeHtmlAttrVal(writer: *std.Io.Writer, value: []const u8) !void {
     for (value) |char| {
         switch (char) {
             '&' => try writer.writeAll("&amp;"),
@@ -292,6 +291,18 @@ fn escapeAttributeValueToWriter(writer: *std.Io.Writer, value: []const u8) !void
             '>' => try writer.writeAll("&gt;"),
             '"' => try writer.writeAll("&quot;"),
             '\'' => try writer.writeAll("&#x27;"),
+            else => try writer.writeByte(char),
+        }
+    }
+}
+
+/// Escapes: & < >
+fn escapHtmlTextNode(writer: *std.Io.Writer, value: []const u8) !void {
+    for (value) |char| {
+        switch (char) {
+            '&' => try writer.writeAll("&amp;"),
+            '<' => try writer.writeAll("&lt;"),
+            '>' => try writer.writeAll("&gt;"),
             else => try writer.writeByte(char),
         }
     }
@@ -871,7 +882,7 @@ pub const Component = union(enum) {
                         }
                         if (attribute.value) |value| {
                             try writer.writeAll("=\"");
-                            try escapeAttributeValueToWriter(writer, value);
+                            try escapeHtmlAttrVal(writer, value);
                             try writer.writeAll("\"");
                         }
                     }
@@ -1122,8 +1133,9 @@ pub const ZxContext = struct {
     fn escapeHtml(self: *ZxContext, text: []const u8) []const u8 {
         const allocator = self.getAlloc();
         // Use a buffer writer to leverage the shared escaping logic
+        // For text content, we only escape & < > (not quotes)
         var aw = std.io.Writer.Allocating.init(allocator);
-        escapeAttributeValueToWriter(&aw.writer, text) catch @panic("OOM");
+        escapHtmlTextNode(&aw.writer, text) catch @panic("OOM");
         return aw.written();
     }
 

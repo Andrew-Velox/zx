@@ -14,7 +14,8 @@ COPY src/ ./src
 COPY site/ ./site
 COPY build.zig.zon ./build.zig.zon
 COPY build.zig ./build.zig
-COPY packages/tree-sitter-zx ./packages/tree-sitter-zx
+COPY packages/ ./packages/
+COPY vendor/ ./vendor
 
 RUN /opt/zig/zig build -Ddoc -Doptimize=ReleaseSmall
 
@@ -26,4 +27,3 @@ COPY --from=build /build/site/.zx/assets /site/.zx/assets
 COPY site/.zx/assets/main.js /site/.zx/assets/main.js
 
 ENTRYPOINT ["/server"]
-
