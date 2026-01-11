@@ -12,6 +12,7 @@ pub fn Layout(ctx: zx.LayoutContext, children: zx.Component) zx.Component {
             <html lang="en" @allocator={ctx.arena}>
                 <head>
                     <title>{title}</title>
+                    <meta name="description" content={description} />
                 </head>
                 <body>
                     {children}
@@ -27,6 +28,7 @@ pub fn Layout(ctx: zx.LayoutContext, children: zx.Component) zx.Component {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
                 <title>{title}</title>
+                <meta name="description" content={description} />
 
                 <meta name="keywords" content={keywords} />
                 <meta name="author" content="Nurul Huda" />
