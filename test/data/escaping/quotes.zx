@@ -1,9 +1,110 @@
 pub fn Page(allocator: zx.Allocator) zx.Component {
+    // Characters that need HTML escaping
+    const double_quote = "\"quoted\"";
+    const single_quote = "'single'";
+    const less_than = "a < b";
+    const greater_than = "a > b";
+    const ampersand = "rock & roll";
+    const backtick = "`template`";
+
+    // Combinations and edge cases
+    const html_tag = "<script>alert('xss')</script>";
+    const html_entity = "&amp; &lt; &gt; &quot;";
+    const url_with_params = "https://example.com?a=1&b=2&c=<test>";
+    const json_like = "{\"key\": \"value\", \"num\": 123}";
+    const js_code = "const x = \"test\"; if (a < b && c > d) {}";
+    const css_value = "content: \"hello\"; url('image.png')";
+    const mixed = "Say \"Hello\" & 'Goodbye' with <tags> & `code`";
+
+    // Unicode and special chars
+    const unicode = "你好 مرحبا 🎉 < emoji > test";
+    const newlines = "line1\nline2\tline3";
+    const null_char = "before\x00after";
+    const backslash = "path\\to\\file";
+
     return (
         <div @allocator={allocator}>
-             quote should be escaped 
-            <code>"quote"</code>
-            <pre>"quote"</pre>
+            // Basic escaping in text content
+            <section id="text-content">
+                <h2>Text Content Escaping</h2>
+                <p class="double-quote">{double_quote}</p>
+                <p class="single-quote">{single_quote}</p>
+                <p class="less-than">{less_than}</p>
+                <p class="greater-than">{greater_than}</p>
+                <p class="ampersand">{ampersand}</p>
+                <p class="backtick">{backtick}</p>
+                <p class="html-tag">{html_tag}</p>
+                <p class="html-entity">{html_entity}</p>
+                <p class="url">{url_with_params}</p>
+                <p class="json">{json_like}</p>
+                <p class="js-code">{js_code}</p>
+                <p class="css">{css_value}</p>
+                <p class="mixed">{mixed}</p>
+                <p class="unicode">{unicode}</p>
+                <p class="newlines">{newlines}</p>
+                <p class="backslash">{backslash}</p>
+            </section>
+
+            // Escaping in attributes
+            <section id="attributes">
+                <h2>Attribute Escaping</h2>
+                <div data-double={double_quote}>double quote in attr</div>
+                <div data-single={single_quote}>single quote in attr</div>
+                <div data-less={less_than}>less than in attr</div>
+                <div data-greater={greater_than}>greater than in attr</div>
+                <div data-amp={ampersand}>ampersand in attr</div>
+                <div data-backtick={backtick}>backtick in attr</div>
+                <div data-html={html_tag}>html tag in attr</div>
+                <div data-entity={html_entity}>html entity in attr</div>
+                <div data-url={url_with_params}>url in attr</div>
+                <div data-json={json_like}>json in attr</div>
+                <div data-js={js_code}>js code in attr</div>
+                <div data-css={css_value}>css in attr</div>
+                <div data-mixed={mixed}>mixed in attr</div>
+                <div data-unicode={unicode}>unicode in attr</div>
+                <div data-newlines={newlines}>newlines in attr</div>
+                <div data-backslash={backslash}>backslash in attr</div>
+            </section>
+
+            // Inline literal values in attributes
+            <section id="inline-attrs">
+                <h2>Inline Attribute Values</h2>
+                <div title="Say 'hello' & 'goodbye'">inline escaped</div>
+                <div data-value="<script>test</script>">inline html</div>
+                <div data-query="?a=1&b=2">inline query</div>
+                <input type="text" placeholder="Enter 'value' here" />
+                <a href="https://example.com?q=a<b&x=1">url attr</a>
+                {null_char}
+            </section>
+
+            // Pre and code elements (preserve formatting)
+            <section id="pre-code">
+                <h2>Pre/Code Elements</h2>
+                <code>"quote" &  'single'</code>
+                <pre @escaping={.none}>
+                    {
+\\const x = "test";
+\\if (a < b && c > d) {
+\\    console.log('hello');
+\\}
+                    }
+                </pre>
+                <code>{html_tag}</code>
+                <pre>{js_code}</pre>
+            </section>
+
+            // Edge cases
+            <section id="edge-cases">
+                <h2>Edge Cases</h2>
+                <p data-empty="">empty attr</p>
+                <p data-space=" ">space attr</p>
+                <p data-only-special="<>&\'">only special chars</p>
+                <p>{"<>&\"'"}</p>
+                <p>Text with "quotes" in the middle</p>
+                <p>Multiple: " " " quotes " " "</p>
+                <p>&amp;&lt;&gt; - raw entities</p>
+                <div data-nested="{'inner': 'value'}">nested json attr</div>
+            </section>
         </div>
     );
 }
