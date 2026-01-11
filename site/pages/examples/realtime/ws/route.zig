@@ -14,6 +14,7 @@ pub fn GET(ctx: zx.RouteContext) !void {
     try ctx.socket.upgrade(data);
 }
 
+const MAX_MESSAGES = 100;
 pub fn SocketOpen(ctx: zx.SocketOpenCtx(SocketData)) !void {
     ctx.socket.configure(.{ .publish_to_self = true });
     ctx.socket.subscribe(CHAT_TOPIC);
@@ -25,7 +26,7 @@ pub fn SocketOpen(ctx: zx.SocketOpenCtx(SocketData)) !void {
 
     // Send last 5 messages (oldest to newest for correct display with column-reverse)
     const msg_count = messages.items.len;
-    const start_idx = if (msg_count > 5) msg_count - 5 else 0;
+    const start_idx = if (msg_count > MAX_MESSAGES) msg_count - MAX_MESSAGES else 0;
     for (messages.items[start_idx..]) |msg| {
         try ctx.socket.write(try ctx.fmt(
             "{s}: {s}",
